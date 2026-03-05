@@ -111,7 +111,13 @@ sequenceDiagram
 
 An Openflow runtime must be deployed and accessible before setting up the Kinesis connector.
 
-Follow the setup steps in [`../openflow-setup.md`](../openflow-setup.md) to discover or configure an Openflow runtime and create a nipyapi profile.
+Follow [`../openflow-setup.md`](../openflow-setup.md) which will:
+1. **Discover** existing deployments via `SHOW OPENFLOW DATA PLANE INTEGRATIONS`
+2. **Discover** existing runtimes via `SHOW OPENFLOW RUNTIME INTEGRATIONS`
+3. **Extract** the NiFi API URL from the runtime's `OAUTH_REDIRECT_URI`
+4. **Create** a nipyapi profile pointing to the discovered runtime
+
+> Do NOT skip discovery. Most environments already have Openflow deployed.
 
 ## Setup
 

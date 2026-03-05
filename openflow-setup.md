@@ -1,6 +1,12 @@
-# Openflow Runtime Setup (Manual)
+# Openflow Runtime Setup
 
-Minimal steps to get an Openflow runtime accessible via nipyapi.
+Discover existing Openflow runtimes via SQL and create a nipyapi profile.
+
+<!-- AI INSTRUCTIONS
+IMPORTANT: Always run the SQL discovery steps (2a, 2b) FIRST.
+Do NOT ask the user to deploy Openflow unless the SQL queries return empty results.
+Most users already have Openflow deployed — discover it, don't assume it's missing.
+-->
 
 > All `snow` and `nipyapi` commands below assume the venv created by `SKILL.md` prerequisites.
 > Use `venv/bin/snow` and `venv/bin/nipyapi` from the skill root directory.
@@ -23,8 +29,8 @@ venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRA
 
 | Result | Action |
 |--------|--------|
-| Empty result | No Openflow deployed — deploy via the Snowflake Control Plane UI first |
-| Returns rows | Extract deployment names, continue |
+| Returns rows | Extract deployment names, continue to 2b |
+| Empty result | Ask user if they have Openflow deployed — they may need to deploy via the Snowflake Control Plane UI |
 
 For each deployment, get details:
 

@@ -19,7 +19,11 @@ SKILL_DIR is the directory containing this SKILL.md file.
    - If fails, ask user which Snowflake connection to use
    - If succeeds, show account/user/role and ask user to confirm
 5. Show summary of both connections and ask "Does this look correct?" before proceeding
-6. After user confirms, list available integrations from the Sub-folders table below and ask
+6. Discover Openflow runtimes: read SKILL_DIR/openflow-setup.md and execute its SQL discovery
+   steps (SHOW OPENFLOW DATA PLANE INTEGRATIONS, SHOW OPENFLOW RUNTIME INTEGRATIONS).
+   ALWAYS run these SQL queries — do NOT ask the user to deploy Openflow first.
+   Only if the queries return empty results, then ask the user about deployment.
+7. After user confirms, list available integrations from the Sub-folders table below and ask
    the user which one they'd like to work with. Use AskUserQuestion with options built from
    the table (e.g., "Kinesis + Openflow streaming ingestion"). Then load the selected
    sub-folder's README.md and follow its instructions.
