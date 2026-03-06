@@ -35,6 +35,27 @@ STEP 3: After user confirms, THEN run prerequisite checks:
 
 STEP 4: Execute the integration setup following the README.md instructions
 
+IMPORTANT: Before creating any Snowflake resource (database, table, warehouse, role, network rule,
+external access integration, etc.), first check if it already exists:
+  - SHOW DATABASES LIKE '<name>';
+  - SHOW TABLES LIKE '<name>' IN <db>.<schema>;
+  - SHOW WAREHOUSES LIKE '<name>';
+  - SHOW ROLES LIKE '<name>';
+  - SHOW NETWORK RULES LIKE '<name>';
+  - SHOW INTEGRATIONS LIKE '<name>';
+If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. Use it, or create a new one with a different name?"
+Only create new resources after user confirms.
+
+Similarly, before creating any AWS resource (Kinesis stream, DynamoDB table, Lambda function,
+EventBridge rule, IAM role, etc.), first check if it already exists:
+  - aws kinesis describe-stream --stream-name <name> --region <region> --profile <profile>
+  - aws dynamodb describe-table --table-name <name> --region <region> --profile <profile>
+  - aws lambda get-function --function-name <name> --region <region> --profile <profile>
+  - aws events describe-rule --name <name> --region <region> --profile <profile>
+  - aws iam get-role --role-name <name>
+If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. Use it, or create a new one with a different name?"
+Only create new resources after user confirms.
+
 IMPORTANT: For all snow/nipyapi commands in sub-skills, use the venv binaries:
   SKILL_DIR/venv/bin/snow
   SKILL_DIR/venv/bin/nipyapi

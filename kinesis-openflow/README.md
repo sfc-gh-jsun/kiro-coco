@@ -2,8 +2,8 @@
 
 ---
 
-**Copyright © 2026 James Sun, Snowflake, Inc.**  
-**Created:** March 5, 2026  
+**Copyright © 2026 James Sun, Snowflake, Inc.**
+**Created:** March 5, 2026
 **Author:** James Sun (james.sun@snowflake.com)
 
 All rights reserved. This document is provided for informational and educational purposes.
@@ -36,7 +36,7 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
 | `<AWS_REGION>` | AWS region for Kinesis, DynamoDB, CloudWatch | `us-west-2` |
-| `<AWS_PROFILE>` | AWS CLI profile name | `jsnow` |
+| `<AWS_PROFILE>` | AWS CLI profile name | `my-profile` |
 | `<AWS_ACCESS_KEY>` | AWS access key ID for Openflow | *(from IAM)* |
 | `<AWS_SECRET_KEY>` | AWS secret access key for Openflow | *(from IAM)* |
 | `<STREAM_NAME>` | Kinesis Data Stream name | `my-events-stream` |
@@ -44,7 +44,7 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | `<DB_NAME>` | Snowflake destination database | `KINESIS_DB` |
 | `<TABLE_NAME>` | Snowflake destination table | `RAW_EVENTS` |
 | `<WAREHOUSE>` | Snowflake warehouse for Openflow | `OPENFLOW_WH` |
-| `<OPENFLOW_ROLE>` | Snowflake role for Openflow runtime | `OPENFLOW_ROLE` |
+| `<OPENFLOW_ROLE>` | Snowflake role granted to the runtime's service user (not your own user's roles) | `OPENFLOW_ROLE` |
 | `<OPENFLOW_PROFILE>` | nipyapi profile for Openflow runtime | `my_openflow` |
 | `<PG_ID>` | Openflow process group ID (after deploy) | *(from deploy output)* |
 
@@ -56,7 +56,7 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | DynamoDB Table | AWS DynamoDB | KCL lease coordination and checkpoint storage |
 | CloudWatch | AWS CloudWatch | KCL consumer metrics |
 | External Access Integration | Snowflake | Network egress rules for SPCS to reach AWS |
-| Openflow Runtime | Snowflake SPCS | NiFi-based connector runtime |
+| Openflow Kinesis Connector | Snowflake SPCS | NiFi-based connector runtime (Snowflake-managed only, not BYOC) |
 | ConsumeKinesisStream | Openflow Processor | KCL-based Kinesis consumer |
 | PutSnowpipeStreaming | Openflow Processor | Batch insert via Snowpipe Streaming API |
 | Target Table | Snowflake | Destination (standard or Iceberg) |
@@ -1036,4 +1036,4 @@ Producer           AWS              Snowflake
 
 ---
 
-**Ready to start?** Jump to [Getting Started](#getting-started) to choose your path.
+**Ready to start?** Jump to [Getting Started](#getting-starte                        

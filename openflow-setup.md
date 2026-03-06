@@ -45,14 +45,18 @@ Each row has an `OAUTH_REDIRECT_URI` field. Extract the NiFi API endpoint from i
 - **Runtime key**: the path segment before `/login/oauth2/...`
 - **NiFi API URL**: `https://<host>/<runtime_key>/nifi-api`
 
-### 2c. Detect deployment type
+### 2c. Filter for Snowflake-managed runtimes only
 
-| URL pattern | Type |
-|-------------|------|
-| Host starts with `of--` | SPCS |
-| Host contains `snowflake-customer.app` | BYOC |
+Only SPCS (Snowflake-managed) runtimes are supported for this workflow. BYOC runtimes are not supported.
 
-If no runtimes exist, deploy Openflow via the Snowflake Control Plane UI first.
+| URL pattern | Type | Supported |
+|-------------|------|-----------|
+| Host starts with `of--` | SPCS (Snowflake-managed) | Yes |
+| Host contains `snowflake-customer.app` | BYOC | No — skip these |
+
+> **AI instruction:** When presenting runtimes to the user, filter out any BYOC runtimes (host contains `snowflake-customer.app`). Only show SPCS runtimes (host starts with `of--`). If no SPCS runtimes exist, tell the user they need to deploy a Snowflake-managed Openflow runtime first via the Control Plane UI.
+
+If no SPCS runtimes exist, deploy Openflow via the Snowflake Control Plane UI first.
 
 ## 3. Create nipyapi profile
 
@@ -77,23 +81,23 @@ Each profile needs only two fields: `nifi_url` and `nifi_bearer_token`.
 
 **Example** — given this `OAUTH_REDIRECT_URI` from step 2b:
 ```
-https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/login/oauth2/code/snowflake-openflow
+https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/spcs1/login/oauth2/code/snowflake-openflow
 ```
 
 Write to `~/.nipyapi/profiles.yml`:
 ```yaml
 spcs1:
-  nifi_url: "https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/nifi-api"
+  nifi_url: "https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/spcs1/nifi-api"
   nifi_bearer_token: "<BEARER_TOKEN>"
 ```
 
-Multiple profiles can coexist in the same file:
+Multiple SPCS profiles can coexist in the same file:
 ```yaml
 spcs1:
-  nifi_url: "https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/nifi-api"
+  nifi_url: "https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/spcs1/nifi-api"
   nifi_bearer_token: "<BEARER_TOKEN>"
-byoc1:
-  nifi_url: "https://xqo57ixj.openflow.sfsenorthamerica-jsnow-vhol-demo.us-west-2.aws.snowflake-customer.app/byoc1/nifi-api"
+spcs2:
+  nifi_url: "https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/spcs2/nifi-api"
   nifi_bearer_token: "<BEARER_TOKEN>"
 ```
 
