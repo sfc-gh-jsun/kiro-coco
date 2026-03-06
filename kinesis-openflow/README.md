@@ -111,15 +111,36 @@ This OpenSky ECS endpoint provides real-time flight data in JSON format - perfec
 
 ## Prerequisites
 
-- Kinesis Data Stream exists and has data flowing (or will create for testing)
+### 1. Snowflake-managed Openflow (SPCS) deployment
+
+An Openflow deployment running on SPCS with at least one active runtime is required before proceeding.
+
+- **Running runtime(s)**: Verify via the Openflow UI that at least one runtime is in a running state
+- **Service role grant**: Your Snowflake role must be granted the Openflow service's service role to access the UI (Snowflake managed token handles authentication automatically, but the service role grant is the authorization gate). This same role is needed later when deploying the flow.
+
+**Verify your role has access:**
+
+```sql
+-- List service roles defined by the Openflow service
+SHOW ROLES IN SERVICE <db>.<schema>.<openflow_service>;
+
+-- Check which roles have been granted the service role
+SHOW GRANTS OF SERVICE ROLE <db>.<schema>.<openflow_service>!ALL_ENDPOINTS_USAGE;
+
+-- Grant if missing (requires service owner or MANAGE GRANTS)
+GRANT SERVICE ROLE <db>.<schema>.<openflow_service>!ALL_ENDPOINTS_USAGE TO ROLE <your_role>;
+```
+
+If no Openflow deployment exists, set one up first. This skill does not cover Openflow installation.
+
+### 2. AWS credentials and Kinesis stream
+
+- Kinesis Data Stream exists and has data flowing (or will create one for testing)
 - AWS credentials (Access Key + Secret Key) with permissions for Kinesis, DynamoDB, CloudWatch
+
+### 3. Snowflake permissions
+
 - Snowflake role with INSERT on target table and USAGE on warehouse
-
-### 1. Openflow Runtime (required sub-skill)
-
-An Openflow runtime must be deployed and accessible before setting up the Kinesis connector.
-
-Follow the setup steps in [`../openflow-setup.md`](../openflow-setup.md) to discover or configure an Openflow runtime and create a nipyapi profile.
 
 ## Setup
 
