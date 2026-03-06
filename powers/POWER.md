@@ -1,0 +1,110 @@
+# Kiro-CoCo: AWS + Snowflake Integrated Solutions
+
+Integrated solutions combining AWS services with Snowflake, built collaboratively between Kiro (AWS) and CoCo (Snowflake).
+
+<!-- AI INSTRUCTIONS
+On power activation, follow this workflow:
+
+POWER_DIR is the directory containing this POWER.md file.
+
+STEP 1: Show available integrations FIRST
+- Read the Sub-folders table below and present the available integrations to the user
+- Use AskUserQuestion with options built from the table
+  Example: "Kinesis + Openflow streaming ingestion"
+- Let the user select which integration they want to work with
+
+STEP 2: After user selects an integration, load and display the workflow FIRST
+- Read the selected sub-folder's README.md IN ITS ENTIRETY — do not skip or summarize any section
+- You MUST read every section of the document thoroughly before proceeding with any deployment steps
+- Display the architecture, workflow, and what will be set up
+- Give the user visibility into what we're going to do
+- Ask if they want to proceed
+- IMPORTANT: Do NOT begin deployment until you have read and understood the complete document.
+  Skipping sections leads to missed prerequisites, wrong parameter values, and failed deployments.
+
+STEP 3: After user confirms, THEN run prerequisite checks:
+1. Check Python venv: if POWER_DIR/venv/ does not exist, create it and install dependencies:
+   python3 -m venv POWER_DIR/venv
+   POWER_DIR/venv/bin/pip install snowflake-cli nipyapi[cli]
+   If venv exists, verify: POWER_DIR/venv/bin/snow --version && POWER_DIR/venv/bin/nipyapi --help
+2. Check AWS CLI: `aws --version` — if missing, help install via `brew install awscli` or guide user
+3. Check AWS profile: `aws sts get-caller-identity` — try default profile first
+   - If fails, ask user for their AWS profile name
+   - If succeeds, show account ID and ask user to confirm
+4. Check Snowflake connection: use snowflake_sql_execute to run SELECT CURRENT_ACCOUNT(), CURRENT_USER(), CURRENT_ROLE()
+   - If fails, ask user which Snowflake connection to use
+   - If succeeds, show account/user/role and ask user to confirm
+5. Show summary of both connections and ask "Does this look correct?" before proceeding
+
+STEP 4: Execute the integration setup following the README.md instructions
+
+IMPORTANT: Before creating any Snowflake resource (database, table, warehouse, role, network rule,
+external access integration, etc.), first check if it already exists:
+  - SHOW DATABASES LIKE '<name>';
+  - SHOW TABLES LIKE '<name>' IN <db>.<schema>;
+  - SHOW WAREHOUSES LIKE '<name>';
+  - SHOW ROLES LIKE '<name>';
+  - SHOW NETWORK RULES LIKE '<name>';
+  - SHOW INTEGRATIONS LIKE '<name>';
+If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. Use it, or create a new one with a different name?"
+Only create new resources after user confirms.
+
+Similarly, before creating any AWS resource (Kinesis stream, DynamoDB table, Lambda function,
+EventBridge rule, IAM role, etc.), first check if it already exists:
+  - aws kinesis describe-stream --stream-name <name> --region <region> --profile <profile>
+  - aws dynamodb describe-table --table-name <name> --region <region> --profile <profile>
+  - aws lambda get-function --function-name <name> --region <region> --profile <profile>
+  - aws events describe-rule --name <name> --region <region> --profile <profile>
+  - aws iam get-role --role-name <name>
+If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. Use it, or create a new one with a different name?"
+Only create new resources after user confirms.
+
+IMPORTANT: For all snow/nipyapi commands in sub-skills, use the venv binaries:
+  POWER_DIR/venv/bin/snow
+  POWER_DIR/venv/bin/nipyapi
+-->
+
+## Prerequisites
+
+Before using any integration, verify both CLI tools and connections are working.
+
+**Python venv** (created in this power's directory):
+```bash
+# From the power directory (where POWER.md lives)
+python3 -m venv venv
+venv/bin/pip install snowflake-cli nipyapi[cli]
+```
+
+**AWS CLI:**
+```bash
+aws --version
+aws sts get-caller-identity --profile <AWS_PROFILE>
+```
+
+**Snowflake CLI:**
+```bash
+venv/bin/snow --version
+venv/bin/snow connection test -c <SNOWFLAKE_CONNECTION>
+```
+
+If AWS CLI is missing: `brew install awscli` then `aws configure --profile <name>`
+
+## Sub-folders
+
+Each integration lives in its own sub-folder with a README and relevant artifacts.
+
+| Folder | Integration | AWS Services | Snowflake Features |
+|--------|-------------|--------------|-------------------|
+| `kinesis-openflow/` | Kinesis → Openflow → Snowflake streaming ingestion | Kinesis, DynamoDB, CloudWatch | Openflow SPCS, Snowpipe Streaming |
+
+## Conventions
+
+- Each sub-folder contains its own `README.md` with architecture, setup, and teardown steps
+- Each sub-folder has a `params.yaml` capturing all configurable values
+- Shared prerequisites (e.g., Openflow setup) live at the project root as `.md` files
+- CloudFormation/CDK templates go in the sub-folder
+- SQL scripts for Snowflake setup go in the sub-folder
+- All `snow` and `nipyapi` commands use the venv binaries (`venv/bin/snow`, `venv/bin/nipyapi`)
+- The `venv/` directory is local-only and should be gitignored
+- Include cost estimates where applicable
+- Include cleanup instructions in every integration
