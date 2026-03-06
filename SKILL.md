@@ -14,10 +14,13 @@ STEP 1: Show available integrations FIRST
 - Let the user select which integration they want to work with
 
 STEP 2: After user selects an integration, load and display the workflow FIRST
-- Read the selected sub-folder's README.md
+- Read the selected sub-folder's README.md IN ITS ENTIRETY — do not skip or summarize any section
+- You MUST read every section of the document thoroughly before proceeding with any deployment steps
 - Display the architecture, workflow, and what will be set up
 - Give the user visibility into what we're going to do
 - Ask if they want to proceed
+- IMPORTANT: Do NOT begin deployment until you have read and understood the complete document.
+  Skipping sections leads to missed prerequisites, wrong parameter values, and failed deployments.
 
 STEP 3: After user confirms, THEN run prerequisite checks:
 1. Check Python venv: if SKILL_DIR/venv/ does not exist, create it and install dependencies:
