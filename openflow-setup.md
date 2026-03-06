@@ -56,30 +56,48 @@ If no runtimes exist, deploy Openflow via the Snowflake Control Plane UI first.
 
 ## 3. Create nipyapi profile
 
-Using the values extracted from step 2b:
+Write the profile directly to `~/.nipyapi/profiles.yml` using the template at `templates/profiles.yml`.
 
-```bash
-venv/bin/nipyapi profiles resolve_profile_config \
-  --profile_name "<OPENFLOW_PROFILE>" \
-  --nifi_url "https://<host>/<runtime_key>/nifi-api" \
-  --nifi_bearer_token "<BEARER_TOKEN>" \
-  --nifi_verify_ssl true
+Each profile needs only two fields: `nifi_url` and `nifi_bearer_token`.
+
+**Template** (from `templates/profiles.yml`):
+```yaml
+<PROFILE_NAME>:
+  nifi_url: "<NIFI_API_URL>"
+  nifi_bearer_token: "<BEARER_TOKEN>"
 ```
+
+- `<PROFILE_NAME>` — runtime key from step 2b (e.g., `spcs1`, `byoc1`)
+- `<NIFI_API_URL>` — derived from `OAUTH_REDIRECT_URI`: `https://<host>/<runtime_key>/nifi-api`
+- `<BEARER_TOKEN>` — either:
+  - **Option 1 (recommended):** Use the `password` field from `~/.snowflake/connections.toml` for the Openflow connection (it's a Snowflake PAT that works as a bearer token)
+  - **Option 2:** User provides their own token (e.g., from OAuth or a different PAT)
+
+> **AI instruction:** Read `~/.snowflake/connections.toml`, find the connection that matches the Openflow account, and offer its `password` value as the bearer token. Ask the user: "Use the token from your `<CONNECTION_NAME>` connection, or provide a different one?"
 
 **Example** — given this `OAUTH_REDIRECT_URI` from step 2b:
 ```
 https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/login/oauth2/code/snowflake-openflow
 ```
-The profile command would be:
-```bash
-venv/bin/nipyapi profiles resolve_profile_config \
-  --profile_name "spcs1" \
-  --nifi_url "https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/nifi-api" \
-  --nifi_bearer_token "<BEARER_TOKEN>" \
-  --nifi_verify_ssl true
+
+Write to `~/.nipyapi/profiles.yml`:
+```yaml
+spcs1:
+  nifi_url: "https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/nifi-api"
+  nifi_bearer_token: "<BEARER_TOKEN>"
 ```
 
-> Generate a bearer token via Snowflake PAT or OAuth for the Openflow service role.
+Multiple profiles can coexist in the same file:
+```yaml
+spcs1:
+  nifi_url: "https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/nifi-api"
+  nifi_bearer_token: "<BEARER_TOKEN>"
+byoc1:
+  nifi_url: "https://xqo57ixj.openflow.sfsenorthamerica-jsnow-vhol-demo.us-west-2.aws.snowflake-customer.app/byoc1/nifi-api"
+  nifi_bearer_token: "<BEARER_TOKEN>"
+```
+
+**Important:** If `~/.nipyapi/profiles.yml` already exists, check it first — append new profiles rather than overwriting.
 
 ## 4. Verify connectivity
 
