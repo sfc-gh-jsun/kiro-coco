@@ -11,7 +11,7 @@ All rights reserved. This document is provided for informational and educational
 ---
 
 
-Consume data from an existing Amazon Kinesis Data Stream via Snowflake Openflow (NiFi SPCS) and ingest into Snowflake using Snowpipe Streaming. Includes DynamoDB for KCL checkpoint management.
+Consume data from an existing Amazon Kinesis Data Stream via Snowflake Openflow Kinesis Connector and ingest into Snowflake using Snowpipe Streaming. Includes DynamoDB for KCL checkpoint management.
 
 This integration assumes data is **already flowing into Kinesis** from any upstream source (Lambda, SDK, Kinesis Agent, etc.). It covers only the consumption and ingestion side.
 
