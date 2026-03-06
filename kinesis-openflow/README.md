@@ -121,7 +121,29 @@ Follow [`../openflow-setup.md`](../openflow-setup.md) which will:
 
 ## Setup
 
-### 1. Create Snowflake Target Table
+<!-- AI INSTRUCTIONS
+IMPORTANT: Before creating the target table, ask the user about their data:
+1. What is the Kinesis stream name and AWS region?
+2. What format is the data? (JSON, CSV, etc.)
+3. Ask the user to paste a sample record OR describe the fields.
+Then generate the CREATE TABLE DDL based on their answer.
+Map JSON types to Snowflake types: string→VARCHAR, number→FLOAT, integer→INTEGER, boolean→BOOLEAN, nested object→VARIANT.
+Always add INGESTED_AT TIMESTAMP_NTZ as the last column (no DEFAULT).
+-->
+
+### 1. Gather Stream Information
+
+Before creating the target table, determine the source data schema:
+
+- **Stream name** and **AWS region**
+- **Data format** (JSON, CSV, etc.)
+- **Sample record** or field list from the user
+
+Use the sample to derive column names and types. Snowpipe Streaming limitations:
+- No DEFAULT values, no AUTOINCREMENT, no GEO columns
+- Add `INGESTED_AT TIMESTAMP_NTZ` as the last column (no DEFAULT)
+
+### 2. Create Snowflake Target Table
 
 No DEFAULT values, no AUTOINCREMENT, no GEO columns (Snowpipe Streaming limitation).
 
@@ -145,7 +167,7 @@ GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE <DB_NAME>.PUBLIC.<TABLE_NAME> TO ROLE <OPENFLOW_ROLE>;
 ```
 
-### 2. Create External Access Integration
+### 3. Create External Access Integration
 
 KCL requires access to Kinesis, DynamoDB, **and** CloudWatch. Missing DynamoDB causes a silent failure (consumer runs but reads zero records).
 
@@ -179,7 +201,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 
 **Manual step**: Attach `kinesis_eai` to the Openflow runtime in the Control Plane UI.
 
-### 3. Deploy Kinesis Connector
+### 4. Deploy Kinesis Connector
 
 ```bash
 # Prerequisite: invoke Openflow skill first
@@ -190,7 +212,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
   --flow kinesis
 ```
 
-### 4. Configure Connector Parameters
+### 5. Configure Connector Parameters
 
 ```bash
 ../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
@@ -209,7 +231,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
   }'
 ```
 
-### 5. Start Connector
+### 6. Start Connector
 
 ```bash
 ../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
