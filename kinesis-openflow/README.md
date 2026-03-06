@@ -1,8 +1,33 @@
 # Kinesis + Openflow: Streaming Ingestion to Snowflake
 
+---
+
+**Copyright © 2026 James Sun, Snowflake, Inc.**  
+**Created:** March 5, 2026  
+**Author:** James Sun (james.sun@snowflake.com)
+
+All rights reserved. This document is provided for informational and educational purposes.
+
+---
+
+
 Consume data from an existing Amazon Kinesis Data Stream via Snowflake Openflow (NiFi SPCS) and ingest into Snowflake using Snowpipe Streaming. Includes DynamoDB for KCL checkpoint management.
 
 This integration assumes data is **already flowing into Kinesis** from any upstream source (Lambda, SDK, Kinesis Agent, etc.). It covers only the consumption and ingestion side.
+
+
+## Quick Preview
+
+**New to this workflow?** See the [Complete Flow Diagram](#complete-workflow-diagram) at the end of this document for a visual overview of all steps from setup to cleanup.
+
+**Key sections:**
+- [Getting Started](#getting-started) - Choose Option A (test) or Option B (production)
+- [Setup](#setup) - Step-by-step configuration (Steps 0a, 0b, 1-5)
+- [Verification](#verification) - Confirm data is flowing
+- [Cost Estimation](#cost-estimation-optional) - Measure actual costs after pipeline runs
+- [Cleanup](#cleanup) - Delete all resources when done
+
+---
 
 ## Parameters
 
@@ -23,71 +48,6 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | `<OPENFLOW_PROFILE>` | nipyapi profile for Openflow runtime | `my_openflow` |
 | `<PG_ID>` | Openflow process group ID (after deploy) | *(from deploy output)* |
 
-## Architecture
-
-```mermaid
-flowchart LR
-    subgraph AWS["AWS Cloud"]
-        KDS["Kinesis Data Stream\n(ON_DEMAND)"]
-        DDB["DynamoDB\n(KCL Checkpoints)"]
-        CW["CloudWatch\n(KCL Metrics)"]
-    end
-
-    subgraph SF["Snowflake"]
-        subgraph SPCS["Openflow SPCS Runtime"]
-            CONSUME["ConsumeKinesisStream\n(KCL Consumer)"]
-            TRANSFORM["Transform & Route\n(JSON Parse, Schema Map)"]
-            INGEST["PutSnowpipeStreaming\n(Batch Insert)"]
-        end
-        EAI["External Access\nIntegration"]
-        TBL[("Target Table\n(Standard or Iceberg)")]
-    end
-
-    KDS -->|"Read Records"| CONSUME
-    CONSUME -->|"Lease & Checkpoint"| DDB
-    CONSUME -->|"Publish Metrics"| CW
-    CONSUME --> TRANSFORM --> INGEST
-    INGEST -->|"Snowpipe Streaming API"| TBL
-    EAI -.->|"Network Access"| SPCS
-
-    style AWS fill:#232F3E,stroke:#FF9900,color:#fff
-    style SF fill:#29B5E8,stroke:#1A6F9E,color:#fff
-    style SPCS fill:#1A6F9E,stroke:#29B5E8,color:#fff
-    style KDS fill:#8C4FFF,stroke:#fff,color:#fff
-    style DDB fill:#C925D1,stroke:#fff,color:#fff
-    style CW fill:#E7157B,stroke:#fff,color:#fff
-    style CONSUME fill:#0D6E6E,stroke:#fff,color:#fff
-    style TRANSFORM fill:#0D6E6E,stroke:#fff,color:#fff
-    style INGEST fill:#0D6E6E,stroke:#fff,color:#fff
-    style EAI fill:#1A6F9E,stroke:#29B5E8,color:#fff
-    style TBL fill:#29B5E8,stroke:#fff,color:#fff
-```
-
-## Data Flow
-
-```mermaid
-sequenceDiagram
-    participant KDS as Kinesis Stream
-    participant DDB as DynamoDB (KCL)
-    participant OFC as Openflow Consumer
-    participant SPS as Snowpipe Streaming
-    participant TBL as Snowflake Table
-
-    OFC->>DDB: Acquire shard lease
-    DDB-->>OFC: Lease granted
-
-    loop Every poll interval
-        OFC->>KDS: GetRecords (from checkpoint)
-        KDS-->>OFC: Batch of records
-        OFC->>OFC: Parse JSON, map schema
-        OFC->>SPS: Insert rows (batch ≤10,000)
-        SPS-->>TBL: Write to table
-        OFC->>DDB: Update checkpoint
-    end
-
-    OFC->>CW: Publish metrics (periodic)
-```
-
 ## Components
 
 | Component | Service | Purpose |
@@ -101,9 +61,57 @@ sequenceDiagram
 | PutSnowpipeStreaming | Openflow Processor | Batch insert via Snowpipe Streaming API |
 | Target Table | Snowflake | Destination (standard or Iceberg) |
 
+## Getting Started
+
+### Option A: Test with Sample Data (Recommended for First-Time Setup)
+
+If you don't have a data source yet or want to validate the pipeline architecture first, use this sample flight data endpoint:
+
+**Sample Source:** `http://ecs-alb-1504531980.us-west-2.elb.amazonaws.com:8502/opensky`
+
+This OpenSky ECS endpoint provides real-time flight data in JSON format - perfect for testing the Kinesis → Openflow → Snowflake pipeline.
+
+**Workflow (same as Option B):**
+1. Create Kinesis stream (Step 0a)
+2. Run local producer with OpenSky endpoint (Step 0b)
+3. **Examine the data records** - inspect JSON structure from Kinesis
+4. **Design table schema** based on observed data fields (Step 1)
+5. Configure Openflow (Steps 2-5)
+6. Verify data flows end-to-end
+
+**After successful test**, apply the same workflow to your production data source.
+
+### Option B: Production Setup (Your Data Source)
+
+**Workflow (same as Option A):**
+
+1. **Start with local producer** (easier debugging):
+   - Create production Kinesis stream (Step 0a)
+   - Run local Python producer for your data source (adapt Step 0b template)
+   - **Examine the data records** - inspect JSON structure from Kinesis
+   - **Design table schema** based on observed data fields (Step 1)
+   - Configure Openflow connector (Steps 2-5)
+   - Verify data flows end-to-end
+
+2. **Migrate to Lambda + EventBridge** (optional, after verification):
+   - Package producer logic as Lambda function
+   - Set up EventBridge rule to trigger Lambda on schedule or event
+   - Monitor CloudWatch logs for Lambda execution
+   - Decommission local producer
+
+**Benefits of local-first approach:**
+- Faster iteration cycle during development
+- Easier to debug with direct console output
+- See actual data before designing schema
+- No Lambda packaging/deployment until proven
+
+**If you already have data flowing into Kinesis**, skip to Step 1 and examine existing records to design your schema.
+
+---
+
 ## Prerequisites
 
-- Kinesis Data Stream exists and has data flowing
+- Kinesis Data Stream exists and has data flowing (or will create for testing)
 - AWS credentials (Access Key + Secret Key) with permissions for Kinesis, DynamoDB, CloudWatch
 - Snowflake role with INSERT on target table and USAGE on warehouse
 
@@ -111,52 +119,206 @@ sequenceDiagram
 
 An Openflow runtime must be deployed and accessible before setting up the Kinesis connector.
 
-Follow [`../openflow-setup.md`](../openflow-setup.md) which will:
-1. **Discover** existing deployments via `SHOW OPENFLOW DATA PLANE INTEGRATIONS`
-2. **Discover** existing runtimes via `SHOW OPENFLOW RUNTIME INTEGRATIONS`
-3. **Extract** the NiFi API URL from the runtime's `OAUTH_REDIRECT_URI`
-4. **Create** a nipyapi profile pointing to the discovered runtime
-
-> Do NOT skip discovery. Most environments already have Openflow deployed.
+Follow the setup steps in [`../openflow-setup.md`](../openflow-setup.md) to discover or configure an Openflow runtime and create a nipyapi profile.
 
 ## Setup
 
-<!-- AI INSTRUCTIONS
-IMPORTANT: Before creating the target table, ask the user about their data:
-1. What is the Kinesis stream name and AWS region?
-2. What format is the data? (JSON, CSV, etc.)
-3. Ask the user to paste a sample record OR describe the fields.
-Then generate the CREATE TABLE DDL based on their answer.
-Map JSON types to Snowflake types: string→VARCHAR, number→FLOAT, integer→INTEGER, boolean→BOOLEAN, nested object→VARIANT.
-Always add INGESTED_AT TIMESTAMP_NTZ as the last column (no DEFAULT).
--->
+### Step 0a: Create Kinesis Stream
 
-### 1. Gather Stream Information
+**For testing:** Create a new test stream to validate the pipeline architecture.
 
-Before creating the target table, determine the source data schema:
+**For production:** Create your production stream with appropriate name and capacity.
 
-- **Stream name** and **AWS region**
-- **Data format** (JSON, CSV, etc.)
-- **Sample record** or field list from the user
+```bash
+# Create ON_DEMAND stream (no shard provisioning needed)
+aws kinesis create-stream \
+  --stream-name opensky-test-stream \
+  --stream-mode-config StreamMode=ON_DEMAND \
+  --region <AWS_REGION> \
+  --profile <AWS_PROFILE>
 
-Use the sample to derive column names and types. Snowpipe Streaming limitations:
-- No DEFAULT values, no AUTOINCREMENT, no GEO columns
-- Add `INGESTED_AT TIMESTAMP_NTZ` as the last column (no DEFAULT)
+# Wait for stream to become ACTIVE
+aws kinesis describe-stream \
+  --stream-name opensky-test-stream \
+  --region <AWS_REGION> \
+  --profile <AWS_PROFILE> \
+  --query 'StreamDescription.StreamStatus'
+```
 
-### 2. Create Snowflake Target Table
+**Expected output:** `"ACTIVE"` (takes ~30 seconds)
+
+### Step 0b: Run Local Producer
+
+**Start with a local producer to validate the pipeline before cloud deployment.**
+
+This example uses OpenSky flight data for testing, but you can adapt the script for any data source (API, database, files, etc.).
+
+**Create producer script:**
+```bash
+cat > /tmp/opensky_producer.py << 'PRODUCER_EOF'
+#!/usr/bin/env python3
+"""
+OpenSky to Kinesis Producer
+Fetches flight data from OpenSky API and streams to Kinesis.
+"""
+import json
+import time
+import boto3
+import requests
+from datetime import datetime
+
+# Configuration
+OPENSKY_URL = "http://ecs-alb-1504531980.us-west-2.elb.amazonaws.com:8502/opensky"
+STREAM_NAME = "opensky-test-stream"
+AWS_REGION = "us-west-2"
+AWS_PROFILE = "jsnow"
+POLL_INTERVAL = 10  # seconds
+
+def fetch_opensky_data():
+    """Fetch flight data from OpenSky API."""
+    try:
+        response = requests.get(OPENSKY_URL, timeout=10)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"Error fetching OpenSky data: {e}")
+        return None
+
+def send_to_kinesis(kinesis_client, records):
+    """Send flight records to Kinesis stream."""
+    if not records:
+        return 0
+
+    try:
+        # Batch records (max 500 per request)
+        batch = []
+        for record in records[:500]:
+            batch.append({
+                'Data': json.dumps(record),
+                'PartitionKey': record.get('icao', 'unknown')
+            })
+
+        response = kinesis_client.put_records(
+            StreamName=STREAM_NAME,
+            Records=batch
+        )
+
+        failed = response.get('FailedRecordCount', 0)
+        success = len(batch) - failed
+        return success
+    except Exception as e:
+        print(f"Error sending to Kinesis: {e}")
+        return 0
+
+def main():
+    """Main producer loop."""
+    # Initialize Kinesis client
+    session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+    kinesis = session.client('kinesis')
+
+    print(f"Starting OpenSky producer...")
+    print(f"Stream: {STREAM_NAME}")
+    print(f"Region: {AWS_REGION}")
+    print(f"Poll interval: {POLL_INTERVAL}s")
+    print("-" * 50)
+
+    record_count = 0
+
+    try:
+        while True:
+            # Fetch data
+            data = fetch_opensky_data()
+
+            if data:
+                # Send to Kinesis
+                sent = send_to_kinesis(kinesis, data)
+                record_count += sent
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Sent {sent} records (total: {record_count})")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] No data available")
+
+            # Wait before next poll
+            time.sleep(POLL_INTERVAL)
+
+    except KeyboardInterrupt:
+        print(f"\nProducer stopped. Total records sent: {record_count}")
+
+if __name__ == "__main__":
+    main()
+PRODUCER_EOF
+```
+
+**Run the producer:**
+```bash
+# Install dependencies (if needed)
+pip install boto3 requests
+
+# Run producer (Ctrl+C to stop)
+python3 /tmp/opensky_producer.py
+```
+
+**Expected output:**
+```
+Starting OpenSky producer...
+Stream: opensky-test-stream
+Region: us-west-2
+Poll interval: 10s
+--------------------------------------------------
+[14:23:45] Sent 247 records (total: 247)
+[14:23:55] Sent 251 records (total: 498)
+[14:24:05] Sent 245 records (total: 743)
+...
+```
+
+**Verify data in Kinesis:**
+```bash
+# Get shard iterator
+SHARD_ITERATOR=$(aws kinesis get-shard-iterator \
+  --stream-name opensky-test-stream \
+  --shard-id shardId-000000000000 \
+  --shard-iterator-type LATEST \
+  --region <AWS_REGION> \
+  --profile <AWS_PROFILE> \
+  --query 'ShardIterator' \
+  --output text)
+
+# Read a few records
+aws kinesis get-records \
+  --shard-iterator "$SHARD_ITERATOR" \
+  --limit 5 \
+  --region <AWS_REGION> \
+  --profile <AWS_PROFILE>
+```
+
+**Once data is flowing, proceed to Step 1 to create your Snowflake table. Use the sample records from Step 0b to design your schema.**
+
+### Step 1: Create Snowflake Target Table
+
+**Before creating the table**, analyze your data structure:
+- Use records from Step 0b verification to understand JSON structure
+- Or inspect existing Kinesis stream with `aws kinesis get-records`
+- Design columns based on your data fields
+- Add `INGESTED_AT TIMESTAMP_NTZ` for tracking (no DEFAULT values!)
+
+**Schema requirements** (Snowpipe Streaming limitation):
 
 No DEFAULT values, no AUTOINCREMENT, no GEO columns (Snowpipe Streaming limitation).
 
+**For OpenSky test data:**
 ```sql
 USE ROLE ACCOUNTADMIN;
 
 CREATE DATABASE IF NOT EXISTS <DB_NAME>;
 CREATE SCHEMA IF NOT EXISTS <DB_NAME>.PUBLIC;
 
+-- Flight data schema from OpenSky
 CREATE TABLE <DB_NAME>.PUBLIC.<TABLE_NAME> (
-    -- Define columns matching your Kinesis record schema
-    FIELD1 VARCHAR(100),
-    FIELD2 FLOAT,
+    ICAO VARCHAR(10),
+    ID VARCHAR(20),
+    UTC TIMESTAMP_NTZ,
+    LAT FLOAT,
+    LON FLOAT,
+    ALT INTEGER,
     INGESTED_AT TIMESTAMP_NTZ  -- NO DEFAULT!
 );
 
@@ -167,7 +329,10 @@ GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE <DB_NAME>.PUBLIC.<TABLE_NAME> TO ROLE <OPENFLOW_ROLE>;
 ```
 
-### 3. Create External Access Integration
+**For production data:**
+Replace columns with your actual schema from Step 0 analysis.
+
+### 2. Create External Access Integration
 
 KCL requires access to Kinesis, DynamoDB, **and** CloudWatch. Missing DynamoDB causes a silent failure (consumer runs but reads zero records).
 
@@ -201,7 +366,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 
 **Manual step**: Attach `kinesis_eai` to the Openflow runtime in the Control Plane UI.
 
-### 4. Deploy Kinesis Connector
+### 3. Deploy Kinesis Connector
 
 ```bash
 # Prerequisite: invoke Openflow skill first
@@ -212,7 +377,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
   --flow kinesis
 ```
 
-### 5. Configure Connector Parameters
+### 4. Configure Connector Parameters
 
 ```bash
 ../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
@@ -231,7 +396,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
   }'
 ```
 
-### 6. Start Connector
+### 5. Start Connector
 
 ```bash
 ../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
@@ -259,6 +424,181 @@ aws dynamodb scan --table-name <APP_NAME> \
   --query 'Items[*].{shard:leaseKey.S,checkpoint:checkpoint.S,counter:leaseCounter.N}'
 ```
 
+
+## Cost Estimation (Optional)
+
+### Estimate Actual Costs Based on Running Pipeline
+
+Once your pipeline is flowing, calculate actual costs based on real throughput and usage patterns.
+
+**1. Measure Kinesis Throughput**
+
+```bash
+# Get stream metrics for the last hour
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/Kinesis \
+  --metric-name IncomingRecords \
+  --dimensions Name=StreamName,Value=<STREAM_NAME> \
+  --start-time $(date -u -v-1H '+%Y-%m-%dT%H:%M:%S') \
+  --end-time $(date -u '+%Y-%m-%dT%H:%M:%S') \
+  --period 3600 \
+  --statistics Sum \
+  --region <AWS_REGION> \
+  --profile <AWS_PROFILE>
+
+# Get data volume (bytes)
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/Kinesis \
+  --metric-name IncomingBytes \
+  --dimensions Name=StreamName,Value=<STREAM_NAME> \
+  --start-time $(date -u -v-1H '+%Y-%m-%dT%H:%M:%S') \
+  --end-time $(date -u '+%Y-%m-%dT%H:%M:%S') \
+  --period 3600 \
+  --statistics Sum \
+  --region <AWS_REGION> \
+  --profile <AWS_PROFILE>
+```
+
+**2. Check DynamoDB Usage**
+
+```bash
+# Get table size and read/write capacity
+aws dynamodb describe-table \
+  --table-name <APP_NAME> \
+  --region <AWS_REGION> \
+  --profile <AWS_PROFILE> \
+  --query 'Table.{TableSizeBytes:TableSizeBytes,ItemCount:ItemCount}'
+```
+
+**3. Monitor Snowflake Warehouse Usage**
+
+```sql
+-- Query history for Openflow connector (last 24 hours)
+SELECT
+  WAREHOUSE_NAME,
+  COUNT(*) as query_count,
+  SUM(TOTAL_ELAPSED_TIME)/1000 as total_seconds,
+  SUM(TOTAL_ELAPSED_TIME)/1000/3600 as total_hours,
+  AVG(BYTES_SCANNED) as avg_bytes_scanned
+FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+WHERE START_TIME >= DATEADD(day, -1, CURRENT_TIMESTAMP())
+  AND WAREHOUSE_NAME = '<WAREHOUSE>'
+  AND EXECUTION_STATUS = 'SUCCESS'
+GROUP BY WAREHOUSE_NAME;
+
+-- Check table storage
+SELECT
+  TABLE_CATALOG || '.' || TABLE_SCHEMA || '.' || TABLE_NAME as full_table_name,
+  ROW_COUNT,
+  BYTES / (1024*1024*1024) as size_gb,
+  BYTES / ROW_COUNT as avg_row_bytes
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_NAME = '<TABLE_NAME>'
+  AND TABLE_SCHEMA = 'PUBLIC'
+  AND TABLE_CATALOG = '<DB_NAME>';
+```
+
+**4. Calculate Monthly Costs**
+
+**Kinesis ON_DEMAND Pricing:**
+- PUT Payload Units: $0.014 per 1M units (25 KB each)
+- Extended Data Retention: $0.023 per GB-hour (if enabled)
+
+```bash
+# Example calculation for 1M records/day at 1KB average:
+# Daily PUT units = 1,000,000 records × (1KB / 25KB) = 40,000 units
+# Monthly cost = 40,000 × 30 days × ($0.014 / 1,000,000) = $0.017
+```
+
+**DynamoDB On-Demand Pricing:**
+- Write Request Units: $1.25 per million WRUs
+- Read Request Units: $0.25 per million RRUs
+- Storage: $0.25 per GB-month
+
+```bash
+# Example for KCL checkpoint table (minimal usage):
+# ~100 writes/hour (checkpoints) = 2,400 writes/day
+# Storage: < 1 MB
+# Monthly cost ≈ $0.003 (negligible)
+```
+
+**Snowflake Pricing:**
+- Compute: Varies by edition and warehouse size
+  - Standard Edition: $2/credit (us-west-2)
+  - X-Small warehouse: 1 credit/hour when running
+- Storage: $23-$40 per TB/month (compressed)
+
+```sql
+-- Example for 1M records/day, 100 bytes/record compressed:
+-- Daily ingestion: 100 MB
+-- Monthly storage: ~3 GB
+-- Warehouse usage: ~1 hour/day for small warehouse
+-- Monthly cost ≈ $60 (compute) + $0.12 (storage) = $60.12
+```
+
+**5. Cost Optimization Tips**
+
+**Kinesis:**
+- Use ON_DEMAND mode for variable workloads (already configured)
+- Consider batching records in producer for larger payloads
+- Disable extended retention if not needed (default 24 hours is free)
+
+**DynamoDB:**
+- KCL table is minimal cost (~$0.01/month)
+- No optimization needed for typical workloads
+
+**Snowflake:**
+- Auto-suspend warehouse when idle (configure in Openflow runtime)
+- Use appropriate warehouse size (X-Small sufficient for most streaming)
+- Consider clustering keys for large tables (>100M rows)
+
+**6. Example Real-World Costs**
+
+| Scenario | Records/Day | Avg Size | Kinesis | DynamoDB | Snowflake | Total/Month |
+|----------|-------------|----------|---------|----------|-----------|-------------|
+| Low Volume | 100K | 500 bytes | $0.10 | $0.01 | $30 | **$30** |
+| Medium Volume | 1M | 1 KB | $0.80 | $0.01 | $60 | **$61** |
+| High Volume | 10M | 2 KB | $16.00 | $0.05 | $180 | **$196** |
+
+*Snowflake costs assume X-Small warehouse running ~1 hour/day.*
+
+**7. Set Up Cost Alerts**
+
+```bash
+# Create CloudWatch billing alarm (AWS total)
+aws cloudwatch put-metric-alarm \
+  --alarm-name kinesis-pipeline-cost-alert \
+  --alarm-description "Alert when pipeline costs exceed $100/month" \
+  --metric-name EstimatedCharges \
+  --namespace AWS/Billing \
+  --statistic Maximum \
+  --period 86400 \
+  --evaluation-periods 1 \
+  --threshold 100 \
+  --comparison-operator GreaterThanThreshold \
+  --dimensions Name=ServiceName,Value=AmazonKinesis \
+  --region us-east-1 \
+  --profile <AWS_PROFILE>
+```
+
+```sql
+-- Snowflake resource monitor
+CREATE RESOURCE MONITOR kinesis_pipeline_monitor
+  WITH CREDIT_QUOTA = 100
+  FREQUENCY = MONTHLY
+  START_TIMESTAMP = IMMEDIATELY
+  TRIGGERS
+    ON 75 PERCENT DO NOTIFY
+    ON 100 PERCENT DO SUSPEND;
+
+-- Assign to warehouse
+ALTER WAREHOUSE <WAREHOUSE> SET RESOURCE_MONITOR = kinesis_pipeline_monitor;
+```
+
+**Use this data to forecast monthly costs and optimize your pipeline configuration.**
+
+
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
@@ -269,6 +609,12 @@ aws dynamodb scan --table-name <APP_NAME> \
 | KCL checkpoint stuck | Stale lease from previous deployment | Delete items in KCL DynamoDB table, restart connector |
 
 ## Cleanup
+
+### Complete Resource Cleanup
+
+Remove all resources created during setup to avoid ongoing charges.
+
+**1. Stop and Delete Openflow Connector**
 
 ```bash
 # Stop connector
@@ -281,19 +627,77 @@ nipyapi.profiles.switch('<OPENFLOW_PROFILE>')
 pg = nipyapi.canvas.get_process_group('<PG_ID>', 'id')
 nipyapi.canvas.delete_process_group(pg, force=True)
 "
-
-# Delete KCL DynamoDB table (optional)
-aws dynamodb delete-table --table-name <APP_NAME> --region <AWS_REGION> --profile <AWS_PROFILE>
 ```
 
+**2. Delete AWS Resources**
+
+```bash
+# Delete KCL DynamoDB table
+aws dynamodb delete-table   --table-name <APP_NAME>   --region <AWS_REGION>   --profile <AWS_PROFILE>
+
+# Delete Kinesis stream
+aws kinesis delete-stream   --stream-name <STREAM_NAME>   --region <AWS_REGION>   --profile <AWS_PROFILE>
+
+# If you migrated to Lambda (Option B only):
+# Delete Lambda function
+aws lambda delete-function   --function-name <LAMBDA_FUNCTION_NAME>   --region <AWS_REGION>   --profile <AWS_PROFILE>
+
+# Delete EventBridge rule
+aws events remove-targets   --rule <RULE_NAME>   --ids "1"   --region <AWS_REGION>   --profile <AWS_PROFILE>
+
+aws events delete-rule   --name <RULE_NAME>   --region <AWS_REGION>   --profile <AWS_PROFILE>
+
+# Delete Lambda IAM role (if created)
+aws iam delete-role-policy   --role-name <LAMBDA_ROLE_NAME>   --policy-name <POLICY_NAME>
+
+aws iam delete-role   --role-name <LAMBDA_ROLE_NAME>
+```
+
+**3. Delete Snowflake Resources**
+
 ```sql
--- Snowflake cleanup
+-- Drop table and integration
 DROP TABLE IF EXISTS <DB_NAME>.PUBLIC.<TABLE_NAME>;
 DROP EXTERNAL ACCESS INTEGRATION IF EXISTS kinesis_eai;
 DROP NETWORK RULE IF EXISTS kinesis_network_rule;
+
+-- Optional: Drop database/schema if created for testing
+-- DROP SCHEMA IF EXISTS <DB_NAME>.PUBLIC;
+-- DROP DATABASE IF EXISTS <DB_NAME>;
 ```
 
-## Cost Estimate
+**4. Verify Cleanup**
+
+```bash
+# Verify Kinesis stream deleted
+aws kinesis list-streams   --region <AWS_REGION>   --profile <AWS_PROFILE>
+
+# Verify DynamoDB table deleted
+aws dynamodb list-tables   --region <AWS_REGION>   --profile <AWS_PROFILE>
+
+# Verify Lambda deleted (if applicable)
+aws lambda list-functions   --region <AWS_REGION>   --profile <AWS_PROFILE>
+```
+
+```sql
+-- Verify Snowflake cleanup
+SHOW TABLES IN <DB_NAME>.PUBLIC;
+SHOW INTEGRATIONS LIKE 'kinesis_eai';
+SHOW NETWORK RULES LIKE 'kinesis_network_rule';
+```
+
+**Cleanup Order:**
+1. Stop data flow (Openflow connector)
+2. Delete Kinesis stream (stop new data)
+3. Delete DynamoDB table (KCL state)
+4. Delete Lambda/EventBridge (if used)
+5. Delete Snowflake resources (table, integration)
+
+**Important:** Deleting the Kinesis stream and DynamoDB table will stop all charges. The Snowflake table doesn't incur storage costs until it has data.
+
+## Estimated Costs (Before Setup)
+
+**Typical monthly costs for low-volume workloads:**
 
 | Service | Configuration | Monthly Cost |
 |---------|---------------|-------------|
@@ -302,3 +706,334 @@ DROP NETWORK RULE IF EXISTS kinesis_network_rule;
 | CloudWatch | KCL metrics | ~$0.00 (minimal) |
 | Openflow SPCS | Snowflake compute | Varies by runtime size |
 | **Total (AWS side)** | | **~$1/month** (low volume) |
+
+**For detailed cost estimation based on your actual throughput**, see [Cost Estimation (Optional)](#cost-estimation-optional) after your pipeline is running.
+## Complete Workflow Diagram
+
+### Full End-to-End Flow
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    GETTING STARTED                          │
+│                  Choose Your Path                           │
+└─────────────────────────────────────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+              │                           │
+      ┌───────▼────────┐          ┌──────▼──────┐
+      │   Option A:    │          │  Option B:  │
+      │  Test with     │          │ Production  │
+      │  OpenSky Data  │          │   Setup     │
+      │                │          │             │
+      │  • Learn the   │          │  • Your own │
+      │    workflow    │          │    data     │
+      │  • Validate    │          │  • Scale to │
+      │    pipeline    │          │    Lambda   │
+      └───────┬────────┘          └──────┬──────┘
+              │                          │
+              │ Same workflow,           │
+              │ different data source    │
+              │                          │
+              └─────────┬────────────────┘
+                        │
+         ┌──────────────▼──────────────┐
+         │  PREREQUISITE:              │
+         │  Openflow Runtime deployed  │
+         │  (../openflow-setup.md)     │
+         └──────────────┬──────────────┘
+                        │
+┌───────────────────────▼────────────────────────┐
+│        SETUP WORKFLOW (BOTH OPTIONS)           │
+│         Steps 0a → 0b → 1 → 2 → 3 → 4 → 5      │
+└────────────────────────────────────────────────┘
+
+Step 0a: Create Kinesis Stream
+   │
+   ├─ aws kinesis create-stream (ON_DEMAND)
+   ├─ Wait for ACTIVE status (~30s)
+   └─ ✓ Stream ready
+
+Step 0b: Run Local Producer
+   │
+   ├─ Create Python script
+   ├─ Fetch data (OpenSky or your source)
+   ├─ Push records to Kinesis
+   ├─ Monitor output (record count)
+   └─ ✓ Data flowing into Kinesis
+
+           ┌─────────────────────────┐
+           │  ⚠️  CRITICAL STEP:     │
+           │  EXAMINE DATA STRUCTURE │
+           └─────────────────────────┘
+                    │
+    aws kinesis get-records --limit 5
+                    │
+   ├─ View JSON structure
+   ├─ Identify all fields
+   ├─ Note data types
+   ├─ Check for nested objects
+   └─ ✓ Schema documented
+
+Step 1: Create Snowflake Table
+   │
+   ├─ Design columns from observed data
+   ├─ Map JSON → Snowflake types
+   ├─ Add INGESTED_AT TIMESTAMP_NTZ
+   ├─ CREATE TABLE (no DEFAULT!)
+   ├─ GRANT permissions
+   └─ ✓ Table ready
+
+Step 2: External Access Integration
+   │
+   ├─ CREATE NETWORK RULE
+   │    ├─ kinesis.*.amazonaws.com
+   │    ├─ dynamodb.*.amazonaws.com ← REQUIRED!
+   │    └─ monitoring.*.amazonaws.com
+   ├─ CREATE EXTERNAL ACCESS INTEGRATION
+   ├─ GRANT to Openflow role
+   ├─ Attach in Openflow UI
+   └─ ✓ Network access configured
+
+Step 3: Deploy Kinesis Connector
+   │
+   ├─ nipyapi ci deploy_flow
+   ├─ Registry: ConnectorFlowRegistryClient
+   ├─ Bucket: connectors
+   ├─ Flow: kinesis
+   └─ ✓ Connector deployed (get PG_ID)
+
+Step 4: Configure Connector Parameters
+   │
+   ├─ AWS Access Key ID
+   ├─ AWS Secret Access Key
+   ├─ AWS Region Code
+   ├─ Kinesis Stream Name
+   ├─ Kinesis Application Name (→ DynamoDB table)
+   ├─ Kinesis Stream To Table Map
+   ├─ Snowflake Warehouse
+   ├─ Destination Database/Schema
+   ├─ Snowflake Role
+   └─ ✓ Connector configured
+
+Step 5: Start Connector
+   │
+   ├─ nipyapi ci start_flow
+   ├─ Openflow starts consuming
+   ├─ KCL acquires shard leases
+   ├─ Checkpoints written to DynamoDB
+   └─ ✓ Connector RUNNING
+
+┌────────────────────────────────────────────────┐
+│              VERIFICATION                      │
+│           Confirm End-to-End Flow              │
+└────────────────────────────────────────────────┘
+
+Check Connector Status
+   │
+   ├─ nipyapi ci get_status
+   └─ ✓ Status: RUNNING
+
+Check Data in Snowflake
+   │
+   ├─ SELECT COUNT(*) FROM table
+   ├─ SELECT * ORDER BY INGESTED_AT DESC LIMIT 10
+   └─ ✓ Data appearing in table
+
+Check KCL Checkpoints
+   │
+   ├─ aws dynamodb scan --table-name <APP_NAME>
+   ├─ View: shard, checkpoint, counter
+   └─ ✓ Checkpoints updating
+
+         ┌──────────────────────┐
+         │   ✅ PIPELINE LIVE   │
+         │  Data flowing E2E!   │
+         └──────────────────────┘
+
+┌────────────────────────────────────────────────┐
+│      COST ESTIMATION (OPTIONAL)                │
+│      After Pipeline is Running                 │
+└────────────────────────────────────────────────┘
+
+Measure Actual Usage
+   │
+   ├─ 1. Kinesis metrics (CloudWatch)
+   │    └─ IncomingRecords, IncomingBytes
+   │
+   ├─ 2. DynamoDB table size
+   │    └─ aws dynamodb describe-table
+   │
+   ├─ 3. Snowflake warehouse usage
+   │    └─ ACCOUNT_USAGE.QUERY_HISTORY
+   │
+   └─ 4. Calculate monthly costs
+        ├─ Kinesis: $0.014/1M units
+        ├─ DynamoDB: $1.25/1M writes
+        └─ Snowflake: $2/credit + storage
+
+Example Costs
+   │
+   ├─ Low (100K/day): $30/month
+   ├─ Medium (1M/day): $61/month
+   └─ High (10M/day): $196/month
+
+Set Up Alerts
+   │
+   ├─ AWS CloudWatch billing alarm
+   └─ Snowflake Resource Monitor
+
+┌────────────────────────────────────────────────┐
+│      PRODUCTION MIGRATION (OPTIONAL)           │
+│        Only for Option B users                 │
+└────────────────────────────────────────────────┘
+
+After Local Producer Validation:
+   │
+   ├─ Package producer → Lambda function
+   ├─ Create EventBridge rule (schedule)
+   ├─ Configure IAM role for Lambda
+   ├─ Deploy and test Lambda
+   ├─ Monitor CloudWatch logs
+   ├─ Stop local producer
+   └─ ✓ Production Lambda running
+
+┌────────────────────────────────────────────────┐
+│              TROUBLESHOOTING                   │
+│           Common Issues & Fixes                │
+└────────────────────────────────────────────────┘
+
+Issue: Consumer RUNNING, 0 records
+   │
+   └─ Fix: Add DynamoDB to network rule
+
+Issue: "Table does not exist"
+   │
+   └─ Fix: Re-grant INSERT, restart
+
+Issue: Snowpipe Streaming error on DEFAULT
+   │
+   └─ Fix: Recreate table without DEFAULT
+
+Issue: KCL checkpoint stuck
+   │
+   └─ Fix: Delete DynamoDB items, restart
+
+┌────────────────────────────────────────────────┐
+│              CLEANUP                           │
+│      Complete Resource Teardown                │
+└────────────────────────────────────────────────┘
+
+Cleanup Order (Critical!):
+   │
+   ├─ 1. Stop Openflow Connector
+   │    └─ nipyapi ci stop_flow
+   │
+   ├─ 2. Delete Kinesis Stream
+   │    └─ aws kinesis delete-stream
+   │         (Stops new data)
+   │
+   ├─ 3. Delete DynamoDB Table
+   │    └─ aws dynamodb delete-table
+   │         (Removes checkpoints)
+   │
+   ├─ 4. Delete Lambda + EventBridge (if used)
+   │    ├─ aws lambda delete-function
+   │    ├─ aws events remove-targets
+   │    ├─ aws events delete-rule
+   │    └─ aws iam delete-role
+   │
+   ├─ 5. Delete Snowflake Resources
+   │    ├─ DROP TABLE
+   │    ├─ DROP EXTERNAL ACCESS INTEGRATION
+   │    └─ DROP NETWORK RULE
+   │
+   └─ 6. Verify Cleanup
+        ├─ aws kinesis list-streams
+        ├─ aws dynamodb list-tables
+        ├─ aws lambda list-functions
+        └─ SHOW TABLES / SHOW INTEGRATIONS
+
+         ┌──────────────────────┐
+         │   ✅ ALL CLEANED UP  │
+         │    No ongoing costs  │
+         └──────────────────────┘
+```
+
+### Timeline Estimate
+
+| Phase | Steps | Estimated Time |
+|-------|-------|----------------|
+| **Setup** | 0a, 0b, 1-5 | 30-60 minutes |
+| **Verification** | Check flow | 5-10 minutes |
+| **Cost Analysis** | Measure usage | 15-30 minutes |
+| **Lambda Migration** | Package & deploy | 30-45 minutes (optional) |
+| **Cleanup** | Delete all resources | 10-15 minutes |
+| **Total (first time)** | | **1-2 hours** |
+
+### Decision Points
+
+```
+Start
+  │
+  ├─ Learning/testing?
+  │   └─→ Option A (OpenSky) → Test workflow → Apply to production data
+  │
+  └─ Production ready?
+      └─→ Option B (Your data) → Local producer → Verify → Lambda migration
+```
+
+### Cost Breakdown by Component
+
+| Component | Setup Cost | Running Cost | Cleanup Cost |
+|-----------|------------|--------------|--------------|
+| Kinesis Stream | $0 | $0.10-$16/mo | $0 |
+| DynamoDB Table | $0 | ~$0.01/mo | $0 |
+| Snowflake Table | $0 | $30-$180/mo | $0 |
+| Lambda (optional) | $0 | ~$0.50/mo | $0 |
+| **Total** | **$0** | **$30-$196/mo** | **$0** |
+
+*Costs scale with data volume - see [Cost Estimation](#cost-estimation-optional) for detailed calculations.*
+
+### Architecture Summary
+
+```
+Producer           AWS              Snowflake
+┌─────┐          ┌─────┐          ┌─────────┐
+│Local│─────────▶│Kine-│─────────▶│Openflow │
+│ or  │  PUT     │sis  │  KCL     │  SPCS   │
+│Lam- │          │     │          │         │
+│bda  │          └──┬──┘          │         │
+└─────┘             │              └────┬────┘
+                    │                   │
+                    ▼                   ▼
+                 ┌─────┐          ┌─────────┐
+                 │Dyna-│          │Snowflake│
+                 │moDB │          │  Table  │
+                 │(KCL)│          │         │
+                 └─────┘          └─────────┘
+```
+
+**Data Flow:**
+1. Producer → Kinesis Stream (PutRecords)
+2. Openflow → Kinesis Stream (GetRecords via KCL)
+3. KCL → DynamoDB (Checkpoints)
+4. Openflow → Snowflake (Snowpipe Streaming)
+5. Snowflake → Target Table (INSERT)
+
+### Key Takeaways
+
+✅ **Universal Workflow** - Both Option A and B follow identical steps (only data source differs)
+
+✅ **Schema-First Approach** - Always examine real data before designing table
+
+✅ **Local Testing First** - Start with local producer, migrate to Lambda after validation
+
+✅ **Cost Transparency** - Measure actual costs after pipeline runs, not before
+
+✅ **Complete Cleanup** - Follow teardown order to avoid orphaned resources
+
+✅ **DynamoDB Required** - Missing DynamoDB access = consumer runs but reads zero records
+
+---
+
+**Ready to start?** Jump to [Getting Started](#getting-started) to choose your path.

@@ -1,12 +1,6 @@
-# Openflow Runtime Setup
+# Openflow Runtime Setup (Manual)
 
-Discover existing Openflow runtimes via SQL and create a nipyapi profile.
-
-<!-- AI INSTRUCTIONS
-IMPORTANT: Always run the SQL discovery steps (2a, 2b) FIRST.
-Do NOT ask the user to deploy Openflow unless the SQL queries return empty results.
-Most users already have Openflow deployed — discover it, don't assume it's missing.
--->
+Minimal steps to get an Openflow runtime accessible via nipyapi.
 
 > All `snow` and `nipyapi` commands below assume the venv created by `SKILL.md` prerequisites.
 > Use `venv/bin/snow` and `venv/bin/nipyapi` from the skill root directory.
@@ -29,8 +23,8 @@ venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRA
 
 | Result | Action |
 |--------|--------|
-| Returns rows | Extract deployment names, continue to 2b |
-| Empty result | Ask user if they have Openflow deployed — they may need to deploy via the Snowflake Control Plane UI |
+| Empty result | No Openflow deployed — deploy via the Snowflake Control Plane UI first |
+| Returns rows | Extract deployment names, continue |
 
 For each deployment, get details:
 
@@ -62,49 +56,30 @@ If no runtimes exist, deploy Openflow via the Snowflake Control Plane UI first.
 
 ## 3. Create nipyapi profile
 
-<!-- AI INSTRUCTIONS
-The nipyapi CLI `profiles resolve_profile_config` command may not work reliably in all environments.
-Always create the profiles.yml file directly by writing to ~/.nipyapi/profiles.yml.
-Use the template at SKILL_DIR/templates/profiles.yml as the base structure.
-The bearer token is the same as the Snowflake connection password from connections.toml.
-Read ~/.snowflake/connections.toml to get the password value automatically — do NOT ask the user for it.
--->
-
-Create `~/.nipyapi/profiles.yml` directly with the NiFi URL from step 2b and the bearer token.
-
-Template: [`templates/profiles.yml`](templates/profiles.yml)
-
-```yaml
-# ~/.nipyapi/profiles.yml
-<PROFILE_NAME>:
-  nifi_url: "<NIFI_API_URL>"
-  nifi_bearer_token: "<BEARER_TOKEN>"
-```
-
-**How to get the values:**
-- `<PROFILE_NAME>`: the runtime key from step 2b (e.g., `spcs1`, `byoc1`)
-- `<NIFI_API_URL>`: constructed from `OAUTH_REDIRECT_URI` — `https://<host>/<runtime_key>/nifi-api`
-- `<BEARER_TOKEN>`: the Snowflake connection `password` field from `~/.snowflake/connections.toml`
-
-**Example** with two runtimes:
-
-```yaml
-spcs1:
-  nifi_url: "https://of--<account>.snowflakecomputing.app/spcs1/nifi-api"
-  nifi_bearer_token: "<SNOWFLAKE_PAT>"
-byoc1:
-  nifi_url: "https://<id>.openflow.<account>.<region>.aws.snowflake-customer.app/byoc1/nifi-api"
-  nifi_bearer_token: "<SNOWFLAKE_PAT>"
-```
+Using the values extracted from step 2b:
 
 ```bash
-mkdir -p ~/.nipyapi
-cat > ~/.nipyapi/profiles.yml << 'EOF'
-<PROFILE_NAME>:
-  nifi_url: "<NIFI_API_URL>"
-  nifi_bearer_token: "<BEARER_TOKEN>"
-EOF
+venv/bin/nipyapi profiles resolve_profile_config \
+  --profile_name "<OPENFLOW_PROFILE>" \
+  --nifi_url "https://<host>/<runtime_key>/nifi-api" \
+  --nifi_bearer_token "<BEARER_TOKEN>" \
+  --nifi_verify_ssl true
 ```
+
+**Example** — given this `OAUTH_REDIRECT_URI` from step 2b:
+```
+https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/login/oauth2/code/snowflake-openflow
+```
+The profile command would be:
+```bash
+venv/bin/nipyapi profiles resolve_profile_config \
+  --profile_name "spcs1" \
+  --nifi_url "https://of--sfsenorthamerica-jsnow-vhol-demo.snowflakecomputing.app/spcs1/nifi-api" \
+  --nifi_bearer_token "<BEARER_TOKEN>" \
+  --nifi_verify_ssl true
+```
+
+> Generate a bearer token via Snowflake PAT or OAuth for the Openflow service role.
 
 ## 4. Verify connectivity
 

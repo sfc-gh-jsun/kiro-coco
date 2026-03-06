@@ -3,10 +3,23 @@
 Integrated solutions combining AWS services with Snowflake, built collaboratively between Kiro (AWS) and CoCo (Snowflake).
 
 <!-- AI INSTRUCTIONS
-On skill load, run the prerequisite checks below BEFORE doing anything else.
+On skill load, follow this workflow:
 
 SKILL_DIR is the directory containing this SKILL.md file.
 
+STEP 1: Show available integrations FIRST
+- Read the Sub-folders table below and present the available integrations to the user
+- Use AskUserQuestion with options built from the table
+  Example: "Kinesis + Openflow streaming ingestion"
+- Let the user select which integration they want to work with
+
+STEP 2: After user selects an integration, load and display the workflow FIRST
+- Read the selected sub-folder's README.md
+- Display the architecture, workflow, and what will be set up
+- Give the user visibility into what we're going to do
+- Ask if they want to proceed
+
+STEP 3: After user confirms, THEN run prerequisite checks:
 1. Check Python venv: if SKILL_DIR/venv/ does not exist, create it and install dependencies:
    python3 -m venv SKILL_DIR/venv
    SKILL_DIR/venv/bin/pip install snowflake-cli nipyapi[cli]
@@ -19,14 +32,8 @@ SKILL_DIR is the directory containing this SKILL.md file.
    - If fails, ask user which Snowflake connection to use
    - If succeeds, show account/user/role and ask user to confirm
 5. Show summary of both connections and ask "Does this look correct?" before proceeding
-6. Discover Openflow runtimes: read SKILL_DIR/openflow-setup.md and execute its SQL discovery
-   steps (SHOW OPENFLOW DATA PLANE INTEGRATIONS, SHOW OPENFLOW RUNTIME INTEGRATIONS).
-   ALWAYS run these SQL queries — do NOT ask the user to deploy Openflow first.
-   Only if the queries return empty results, then ask the user about deployment.
-7. After user confirms, list available integrations from the Sub-folders table below and ask
-   the user which one they'd like to work with. Use AskUserQuestion with options built from
-   the table (e.g., "Kinesis + Openflow streaming ingestion"). Then load the selected
-   sub-folder's README.md and follow its instructions.
+
+STEP 4: Execute the integration setup following the README.md instructions
 
 IMPORTANT: For all snow/nipyapi commands in sub-skills, use the venv binaries:
   SKILL_DIR/venv/bin/snow
