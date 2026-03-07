@@ -44,7 +44,12 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | `<DB_NAME>` | Snowflake destination database | `KINESIS_DB` |
 | `<TABLE_NAME>` | Snowflake destination table | `RAW_EVENTS` |
 | `<WAREHOUSE>` | Snowflake warehouse for Openflow | `OPENFLOW_WH` |
+| `<SNOWFLAKE_CONNECTION>` | Snowflake CLI connection name (`snow connection list`) | `my_connection` |
 | `<OPENFLOW_ROLE>` | Snowflake role identified in Step 1 (owns Openflow deployment, granted to runtime service users) | `KINESIS_OPENFLOW_RL` |
+| `<OPENFLOW_DATAPLANE_INTEGRATION>` | Data plane integration name (from `SHOW OPENFLOW DATA PLANE INTEGRATIONS`) | `OPENFLOW_DATAPLANE_...` |
+| `<OPENFLOW_RUNTIME_INTEGRATION>` | Runtime integration name (from `SHOW OPENFLOW RUNTIME INTEGRATIONS`) | `OPENFLOW_RUNTIME_...` |
+| `<OPENFLOW_RUNTIME_SERVICE>` | SPCS service name for the runtime (from `SHOW SERVICES LIKE '%OPENFLOW%'`) | `DB.SCHEMA.OPENFLOW_RDS` |
+| `<OPENFLOW_DATAPLANE_SERVICE>` | SPCS service name for the data plane (from `SHOW SERVICES LIKE '%OPENFLOW%'`) | `DB.SCHEMA.OPENFLOW_MSK` |
 | `<CANVAS_ROLE>` | Dedicated role for humans to log into the Openflow canvas UI | `KINESIS_CANVAS_RL` |
 | `<CANVAS_USER>` | Snowflake user who will log into the canvas UI | `kinesis_openflow_user` |
 | `<OPENFLOW_PROFILE>` | nipyapi profile for Openflow runtime | `my_openflow` |
@@ -157,14 +162,14 @@ If no Openflow deployment exists, set one up first. This skill does not cover Op
 ```bash
 # Create ON_DEMAND stream (no shard provisioning needed)
 aws kinesis create-stream \
-  --stream-name opensky-test-stream \
+  --stream-name <STREAM_NAME> \
   --stream-mode-config StreamMode=ON_DEMAND \
   --region <AWS_REGION> \
   --profile <AWS_PROFILE>
 
 # Wait for stream to become ACTIVE
 aws kinesis describe-stream \
-  --stream-name opensky-test-stream \
+  --stream-name <STREAM_NAME> \
   --region <AWS_REGION> \
   --profile <AWS_PROFILE> \
   --query 'StreamDescription.StreamStatus'
@@ -194,8 +199,8 @@ from datetime import datetime
 
 # Configuration
 OPENSKY_URL = "http://ecs-alb-1504531980.us-west-2.elb.amazonaws.com:8502/opensky"
-STREAM_NAME = "opensky-test-stream"
-AWS_REGION = "us-west-2"
+STREAM_NAME = "<STREAM_NAME>"
+AWS_REGION = "<AWS_REGION>"
 AWS_PROFILE = "<AWS_PROFILE>"
 POLL_INTERVAL = 10  # seconds
 
@@ -299,7 +304,7 @@ Poll interval: 10s
 ```bash
 # Get shard iterator
 SHARD_ITERATOR=$(aws kinesis get-shard-iterator \
-  --stream-name opensky-test-stream \
+  --stream-name <STREAM_NAME> \
   --shard-id shardId-000000000000 \
   --shard-iterator-type LATEST \
   --region <AWS_REGION> \
