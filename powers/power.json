@@ -2,7 +2,7 @@
   "name": "kiro-coco",
   "displayName": "Kiro-CoCo: AWS + Snowflake Integrations",
   "description": "Integrated solutions combining AWS services with Snowflake. Includes Kinesis streaming to Snowflake via Openflow, and other AWS-Snowflake integration patterns.",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "dependencies": [
     "snowflake-openflow"
   ],

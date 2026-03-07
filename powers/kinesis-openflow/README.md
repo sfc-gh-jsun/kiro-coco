@@ -22,7 +22,7 @@ This integration assumes data is **already flowing into Kinesis** from any upstr
 
 **Key sections:**
 - [Getting Started](#getting-started) - Choose Option A (test) or Option B (production)
-- [Setup](#setup) - Step-by-step configuration (Steps 0a, 0b, 1-5)
+- [Setup](#setup) - Step-by-step configuration (Steps 0a, 0b, 1-6)
 - [Verification](#verification) - Confirm data is flowing
 - [Cost Estimation](#cost-estimation-optional) - Measure actual costs after pipeline runs
 - [Cleanup](#cleanup) - Delete all resources when done
@@ -44,7 +44,7 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | `<DB_NAME>` | Snowflake destination database | `KINESIS_DB` |
 | `<TABLE_NAME>` | Snowflake destination table | `RAW_EVENTS` |
 | `<WAREHOUSE>` | Snowflake warehouse for Openflow | `OPENFLOW_WH` |
-| `<OPENFLOW_ROLE>` | Snowflake role granted to the runtime's service user (not your own user's roles) | `OPENFLOW_ROLE` |
+| `<OPENFLOW_ROLE>` | Snowflake role identified in Step 1 (owns Openflow deployment, granted to runtime service users) | `KINESIS_OPENFLOW_RL` |
 | `<OPENFLOW_PROFILE>` | nipyapi profile for Openflow runtime | `my_openflow` |
 | `<PG_ID>` | Openflow process group ID (after deploy) | *(from deploy output)* |
 
@@ -75,9 +75,10 @@ This OpenSky ECS endpoint provides real-time flight data in JSON format - perfec
 1. Create Kinesis stream (Step 0a)
 2. Run local producer with OpenSky endpoint (Step 0b)
 3. **Examine the data records** - inspect JSON structure from Kinesis
-4. **Design table schema** based on observed data fields (Step 1)
-5. Configure Openflow (Steps 2-5)
-6. Verify data flows end-to-end
+ 4. **Identify Openflow role** — discover the role that owns the deployment (Step 1)
+5. **Design table schema** based on observed data fields (Step 2)
+6. Configure Openflow (Steps 3-6)
+7. Verify data flows end-to-end
 
 **After successful test**, apply the same workflow to your production data source.
 
@@ -89,8 +90,9 @@ This OpenSky ECS endpoint provides real-time flight data in JSON format - perfec
    - Create production Kinesis stream (Step 0a)
    - Run local Python producer for your data source (adapt Step 0b template)
    - **Examine the data records** - inspect JSON structure from Kinesis
-   - **Design table schema** based on observed data fields (Step 1)
-   - Configure Openflow connector (Steps 2-5)
+   - **Identify Openflow role** — discover the role that owns the deployment (Step 1)
+   - **Design table schema** based on observed data fields (Step 2)
+   - Configure Openflow connector (Steps 3-6)
    - Verify data flows end-to-end
 
 2. **Migrate to Lambda + EventBridge** (optional, after verification):
@@ -105,7 +107,7 @@ This OpenSky ECS endpoint provides real-time flight data in JSON format - perfec
 - See actual data before designing schema
 - No Lambda packaging/deployment until proven
 
-**If you already have data flowing into Kinesis**, skip to Step 1 and examine existing records to design your schema.
+**If you already have data flowing into Kinesis**, skip to Step 1 (role identification) and Step 2 (table creation) — examine existing records to design your schema.
 
 ---
 
@@ -311,9 +313,73 @@ aws kinesis get-records \
   --profile <AWS_PROFILE>
 ```
 
-**Once data is flowing, proceed to Step 1 to create your Snowflake table. Use the sample records from Step 0b to design your schema.**
+**Once data is flowing, proceed to Step 1 to identify your Openflow role and then Step 2 for the Snowflake table. Use the sample records from Step 0b to design your schema.**
 
-### Step 1: Create Snowflake Target Table
+### Step 1: Identify the Openflow Role
+
+The Openflow connector runs under a Snowflake role that must be granted to the runtime's service users. For demos, **reuse the role that already owns the Openflow deployment** — it already has all required grants.
+
+**1a. Find the role that owns the data plane integration:**
+
+```sql
+-- List Openflow data plane integrations
+SHOW OPENFLOW DATA PLANE INTEGRATIONS;
+
+-- Check who owns it (look for OWNERSHIP grant)
+SHOW GRANTS ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION>;
+-- The role with OWNERSHIP privilege is your <OPENFLOW_ROLE>
+```
+
+**1b. Verify the role is granted to runtime service users:**
+
+```sql
+-- Confirm the role is granted to the runtime service users
+SHOW GRANTS OF ROLE <OPENFLOW_ROLE>;
+-- Look for USER grants to: dpa, integration-secret, runtime-<key>
+```
+
+If you see grants to these service users, **this role is ready to use** — skip to 1d.
+
+**1c. (Production only) Create a dedicated role instead:**
+
+For production environments where you want least-privilege isolation, create a new role:
+
+```sql
+USE ROLE ACCOUNTADMIN;
+
+CREATE ROLE IF NOT EXISTS <OPENFLOW_ROLE>;
+GRANT ROLE <OPENFLOW_ROLE> TO ROLE ACCOUNTADMIN;
+
+-- Grant to runtime service users (REQUIRED for connector to operate)
+GRANT ROLE <OPENFLOW_ROLE> TO USER "dpa";
+GRANT ROLE <OPENFLOW_ROLE> TO USER "integration-secret";
+GRANT ROLE <OPENFLOW_ROLE> TO USER "runtime-<runtime_key>";
+
+-- Grant Openflow integration access
+GRANT USAGE ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <OPENFLOW_ROLE>;
+GRANT OPERATE ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <OPENFLOW_ROLE>;
+GRANT MONITOR ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <OPENFLOW_ROLE>;
+GRANT USAGE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <OPENFLOW_ROLE>;
+```
+
+**1d. Ensure your user has the role and warehouse access:**
+
+```sql
+-- Grant role to your user (for OAuth login to NiFi UI)
+GRANT ROLE <OPENFLOW_ROLE> TO USER <YOUR_USER>;
+
+-- Ensure warehouse exists and is granted
+CREATE WAREHOUSE IF NOT EXISTS <WAREHOUSE>
+  WAREHOUSE_SIZE = 'XSMALL'
+  AUTO_SUSPEND = 60
+  AUTO_RESUME = TRUE;
+
+GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
+```
+
+> **Why this matters:** The role must be granted to the runtime service users for the connector to authenticate. Privileged roles (`ACCOUNTADMIN`, `SECURITYADMIN`, `ORGADMIN`) are blocked by Snowflake's OAuth — you cannot use them to log into the NiFi UI.
+
+### Step 2: Create Snowflake Target Table
 
 **Before creating the table**, analyze your data structure:
 - Use records from Step 0b verification to understand JSON structure
@@ -346,14 +412,13 @@ CREATE TABLE <DB_NAME>.PUBLIC.<TABLE_NAME> (
 -- Grant to Openflow role
 GRANT USAGE ON DATABASE <DB_NAME> TO ROLE <OPENFLOW_ROLE>;
 GRANT USAGE ON SCHEMA <DB_NAME>.PUBLIC TO ROLE <OPENFLOW_ROLE>;
-GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE <DB_NAME>.PUBLIC.<TABLE_NAME> TO ROLE <OPENFLOW_ROLE>;
 ```
 
 **For production data:**
 Replace columns with your actual schema from Step 0 analysis.
 
-### 2. Create External Access Integration
+### Step 3: Create External Access Integration
 
 KCL requires access to Kinesis, DynamoDB, **and** CloudWatch. Missing DynamoDB causes a silent failure (consumer runs but reads zero records).
 
@@ -387,7 +452,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 
 **Manual step**: Attach `kinesis_eai` to the Openflow runtime in the Control Plane UI.
 
-### 3. Deploy Kinesis Connector
+### Step 4: Deploy Kinesis Connector
 
 ```bash
 # Prerequisite: invoke Openflow skill first
@@ -398,7 +463,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
   --flow kinesis
 ```
 
-### 4. Configure Connector Parameters
+### Step 5: Configure Connector Parameters
 
 ```bash
 ../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
@@ -417,7 +482,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
   }'
 ```
 
-### 5. Start Connector
+### Step 6: Start Connector
 
 ```bash
 ../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
@@ -624,6 +689,8 @@ ALTER WAREHOUSE <WAREHOUSE> SET RESOURCE_MONITOR = kinesis_pipeline_monitor;
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| "Role requested has been explicitly blocked" on OAuth login | Default role is ACCOUNTADMIN/SECURITYADMIN (blocked by OAuth) | Change user's default role or append `&role=<OPENFLOW_ROLE>` to OAuth URL |
+| Connector runs but "authorization error" on Snowflake writes | Role not granted to runtime service users | Grant role to `dpa`, `integration-secret`, `runtime-<key>` (see Step 1) |
 | Consumer RUNNING, 0 records | DynamoDB unreachable (EAI missing) | Add `dynamodb.<AWS_REGION>.amazonaws.com:443` to network rule |
 | "Table does not exist" | Grants missing or table recreated | Re-grant INSERT to Openflow role, restart connector |
 | Snowpipe Streaming error on DEFAULT | Column has DEFAULT clause | Recreate table without DEFAULT values |
@@ -677,10 +744,11 @@ aws iam delete-role   --role-name <LAMBDA_ROLE_NAME>
 **3. Delete Snowflake Resources**
 
 ```sql
--- Drop table and integration
+-- Drop table, integration, and role
 DROP TABLE IF EXISTS <DB_NAME>.PUBLIC.<TABLE_NAME>;
 DROP EXTERNAL ACCESS INTEGRATION IF EXISTS kinesis_eai;
 DROP NETWORK RULE IF EXISTS kinesis_network_rule;
+DROP ROLE IF EXISTS <OPENFLOW_ROLE>;
 
 -- Optional: Drop database/schema if created for testing
 -- DROP SCHEMA IF EXISTS <DB_NAME>.PUBLIC;
@@ -712,7 +780,7 @@ SHOW NETWORK RULES LIKE 'kinesis_network_rule';
 2. Delete Kinesis stream (stop new data)
 3. Delete DynamoDB table (KCL state)
 4. Delete Lambda/EventBridge (if used)
-5. Delete Snowflake resources (table, integration)
+5. Delete Snowflake resources (table, integration, role)
 
 **Important:** Deleting the Kinesis stream and DynamoDB table will stop all charges. The Snowflake table doesn't incur storage costs until it has data.
 
@@ -765,7 +833,7 @@ SHOW NETWORK RULES LIKE 'kinesis_network_rule';
                         │
 ┌───────────────────────▼────────────────────────┐
 │        SETUP WORKFLOW (BOTH OPTIONS)           │
-│         Steps 0a → 0b → 1 → 2 → 3 → 4 → 5      │
+│      Steps 0a → 0b → 1 → 2 → 3 → 4 → 5 → 6     │
 └────────────────────────────────────────────────┘
 
 Step 0a: Create Kinesis Stream
@@ -795,16 +863,26 @@ Step 0b: Run Local Producer
    ├─ Check for nested objects
    └─ ✓ Schema documented
 
-Step 1: Create Snowflake Table
+Step 1: Identify the Openflow Role
+   │
+   ├─ SHOW GRANTS ON data plane integration
+   ├─ Find role with OWNERSHIP → <OPENFLOW_ROLE>
+   ├─ Verify role granted to service users
+   ├─ (Production: create dedicated role instead)
+   ├─ GRANT role to your user
+   ├─ CREATE/GRANT warehouse
+   └─ ✓ Role ready for OAuth + connector
+
+Step 2: Create Snowflake Table
    │
    ├─ Design columns from observed data
    ├─ Map JSON → Snowflake types
    ├─ Add INGESTED_AT TIMESTAMP_NTZ
    ├─ CREATE TABLE (no DEFAULT!)
-   ├─ GRANT permissions
+   ├─ GRANT permissions to role
    └─ ✓ Table ready
 
-Step 2: External Access Integration
+Step 3: External Access Integration
    │
    ├─ CREATE NETWORK RULE
    │    ├─ kinesis.*.amazonaws.com
@@ -815,7 +893,7 @@ Step 2: External Access Integration
    ├─ Attach in Openflow UI
    └─ ✓ Network access configured
 
-Step 3: Deploy Kinesis Connector
+Step 4: Deploy Kinesis Connector
    │
    ├─ nipyapi ci deploy_flow
    ├─ Registry: ConnectorFlowRegistryClient
@@ -823,7 +901,7 @@ Step 3: Deploy Kinesis Connector
    ├─ Flow: kinesis
    └─ ✓ Connector deployed (get PG_ID)
 
-Step 4: Configure Connector Parameters
+Step 5: Configure Connector Parameters
    │
    ├─ AWS Access Key ID
    ├─ AWS Secret Access Key
@@ -836,7 +914,7 @@ Step 4: Configure Connector Parameters
    ├─ Snowflake Role
    └─ ✓ Connector configured
 
-Step 5: Start Connector
+Step 6: Start Connector
    │
    ├─ nipyapi ci start_flow
    ├─ Openflow starts consuming
@@ -966,7 +1044,8 @@ Cleanup Order (Critical!):
    ├─ 5. Delete Snowflake Resources
    │    ├─ DROP TABLE
    │    ├─ DROP EXTERNAL ACCESS INTEGRATION
-   │    └─ DROP NETWORK RULE
+   │    ├─ DROP NETWORK RULE
+   │    └─ DROP ROLE
    │
    └─ 6. Verify Cleanup
         ├─ aws kinesis list-streams
