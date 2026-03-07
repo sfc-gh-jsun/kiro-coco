@@ -378,9 +378,28 @@ GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
 
 **1e. Create a canvas UI user (for humans who need to log into the NiFi canvas):**
 
-> **`<OPENFLOW_ROLE>` already has canvas UI access** — it owns the data plane integration and already has `ALL_ENDPOINTS_USAGE` on the SPCS services. For demos and development, simply grant `<OPENFLOW_ROLE>` to the user. Only create a separate `<CANVAS_ROLE>` for production least-privilege isolation.
->
 > Privileged roles (`ACCOUNTADMIN`, `SECURITYADMIN`, `ORGADMIN`) are blocked by Snowflake's OAuth. The canvas user's default role must be a non-privileged role.
+
+First, discover the SPCS service names and check whether `<OPENFLOW_ROLE>` already has endpoint access:
+
+```sql
+-- Find SPCS service names
+SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
+
+-- Check if OPENFLOW_ROLE already has ALL_ENDPOINTS_USAGE on the runtime service
+SHOW GRANTS OF SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE;
+```
+
+If `<OPENFLOW_ROLE>` is **not** listed, grant it now (one-time setup):
+
+```sql
+GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
+  TO ROLE <OPENFLOW_ROLE>;
+GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE
+  TO ROLE <OPENFLOW_ROLE>;
+```
+
+Once `<OPENFLOW_ROLE>` has endpoint access, choose your approach:
 
 **Option A — Demo/Dev (recommended): reuse `<OPENFLOW_ROLE>`**
 

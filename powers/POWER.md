@@ -78,10 +78,14 @@ IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow
    If the role is missing, grant it.
 
 IMPORTANT: For the canvas UI user setup step (Step 1e in kinesis-openflow):
-<OPENFLOW_ROLE> already owns the data plane integration and has ALL_ENDPOINTS_USAGE on the SPCS
-services — it already satisfies all canvas UI access requirements.
 1. Ask the user: "Do you need a user to log into the Openflow canvas UI? If so, provide a username."
-2. For demos/dev (Option A): simply create the user with DEFAULT_ROLE = <OPENFLOW_ROLE>:
+2. First discover SPCS service names: SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
+   Then verify whether <OPENFLOW_ROLE> already has ALL_ENDPOINTS_USAGE:
+     SHOW GRANTS OF SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE;
+   If <OPENFLOW_ROLE> is NOT listed, grant it before proceeding:
+     GRANT SERVICE ROLE <runtime_service>!ALL_ENDPOINTS_USAGE TO ROLE <OPENFLOW_ROLE>;
+     GRANT SERVICE ROLE <dataplane_service>!ALL_ENDPOINTS_USAGE TO ROLE <OPENFLOW_ROLE>;
+3. For demos/dev (Option A): create the user with DEFAULT_ROLE = <OPENFLOW_ROLE>:
      CREATE USER <CANVAS_USER> PASSWORD='...' DEFAULT_ROLE=<OPENFLOW_ROLE>;
      GRANT ROLE <OPENFLOW_ROLE> TO USER <CANVAS_USER>;
 3. For production (Option B): create a separate <CANVAS_ROLE> with minimal grants:
