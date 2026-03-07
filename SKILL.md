@@ -1,3 +1,14 @@
+---
+name: kiro-coco
+description: >
+  AWS + Snowflake integrated solutions combining Kinesis, Lambda, DynamoDB, and
+  EventBridge with Snowflake Openflow and Snowpipe Streaming. Use this skill
+  whenever the user wants to set up streaming data pipelines from AWS to
+  Snowflake, deploy a Kinesis connector, configure Openflow on SPCS, ingest
+  real-time data into Snowflake from AWS, or build any AWS ↔ Snowflake
+  integration — even if they don't say "kiro-coco" explicitly.
+---
+
 # Kiro-CoCo: AWS + Snowflake Integrated Solutions
 
 Integrated solutions combining AWS services with Snowflake, built collaboratively between Kiro (AWS) and CoCo (Snowflake).
@@ -23,16 +34,16 @@ STEP 2: After user selects an integration, load and display the workflow FIRST
   Skipping sections leads to missed prerequisites, wrong parameter values, and failed deployments.
 
 STEP 3: After user confirms, THEN run prerequisite checks:
-1. Check Python venv: if SKILL_DIR/venv/ does not exist, create it and install dependencies:
-   python3 -m venv SKILL_DIR/venv
-   SKILL_DIR/venv/bin/pip install snowflake-cli nipyapi[cli]
-   If venv exists, verify: SKILL_DIR/venv/bin/snow --version && SKILL_DIR/venv/bin/nipyapi --help
+1. Check required CLIs:
+   - nipyapi: `~/.snowflake/venv/nipyapi-env/bin/nipyapi --help` — if missing, tell user to run:
+     `pip install nipyapi[cli]` in their nipyapi env (~/.snowflake/venv/nipyapi-env)
+   - snow: `snow --version` — if missing, help install via `pip install snowflake-cli`
 2. Check AWS CLI: `aws --version` — if missing, help install via `brew install awscli` or guide user
 3. Check AWS profile: `aws sts get-caller-identity` — try default profile first
    - If fails, ask user for their AWS profile name
    - If succeeds, show account ID and ask user to confirm
-4. Check Snowflake connection: use snowflake_sql_execute to run SELECT CURRENT_ACCOUNT(), CURRENT_USER(), CURRENT_ROLE()
-   - If fails, ask user which Snowflake connection to use
+4. Check Snowflake connection: run `SKILL_DIR/venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SELECT CURRENT_ACCOUNT(), CURRENT_USER(), CURRENT_ROLE()" --format json`
+   - If fails, ask user which Snowflake connection to use (list available with `SKILL_DIR/venv/bin/snow connection list`)
    - If succeeds, show account/user/role and ask user to confirm
 5. Show summary of both connections and ask "Does this look correct?" before proceeding
 
@@ -77,20 +88,18 @@ IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow
      SHOW GRANTS TO USER <current_user>;
    If the role is missing, grant it.
 
-IMPORTANT: For all snow/nipyapi commands in sub-skills, use the venv binaries:
-  SKILL_DIR/venv/bin/snow
-  SKILL_DIR/venv/bin/nipyapi
+IMPORTANT: For all snow/nipyapi commands in sub-skills, use:
+  snow  (system CLI)
+  ~/.snowflake/venv/nipyapi-env/bin/nipyapi
 -->
 
 ## Prerequisites
 
 Before using any integration, verify both CLI tools and connections are working.
 
-**Python venv** (created in this skill's directory):
+**nipyapi** (pre-installed at `~/.snowflake/venv/nipyapi-env`):
 ```bash
-# From the skill directory (where SKILL.md lives)
-python3 -m venv venv
-venv/bin/pip install snowflake-cli nipyapi[cli]
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --help
 ```
 
 **AWS CLI:**
@@ -101,11 +110,12 @@ aws sts get-caller-identity --profile <AWS_PROFILE>
 
 **Snowflake CLI:**
 ```bash
-venv/bin/snow --version
-venv/bin/snow connection test -c <SNOWFLAKE_CONNECTION>
+snow --version
+snow connection test -c <SNOWFLAKE_CONNECTION>
 ```
 
 If AWS CLI is missing: `brew install awscli` then `aws configure --profile <name>`
+If nipyapi is missing: `pip install nipyapi[cli]` in `~/.snowflake/venv/nipyapi-env`
 
 ## Sub-folders
 

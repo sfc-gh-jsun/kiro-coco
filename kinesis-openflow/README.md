@@ -194,7 +194,7 @@ from datetime import datetime
 OPENSKY_URL = "http://ecs-alb-1504531980.us-west-2.elb.amazonaws.com:8502/opensky"
 STREAM_NAME = "opensky-test-stream"
 AWS_REGION = "us-west-2"
-AWS_PROFILE = "jsnow"
+AWS_PROFILE = "<AWS_PROFILE>"
 POLL_INTERVAL = 10  # seconds
 
 def fetch_opensky_data():
@@ -457,7 +457,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ```bash
 # Prerequisite: invoke Openflow skill first
 # Deploy connector from registry
-../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci deploy_flow \
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci deploy_flow \
   --registry_client ConnectorFlowRegistryClient \
   --bucket connectors \
   --flow kinesis
@@ -466,7 +466,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ### Step 5: Configure Connector Parameters
 
 ```bash
-../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
   --process_group_id "<PG_ID>" \
   --parameters '{
     "AWS Access Key ID": "<AWS_ACCESS_KEY>",
@@ -485,7 +485,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ### Step 6: Start Connector
 
 ```bash
-../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
   --process_group_id "<PG_ID>"
 ```
 
@@ -493,7 +493,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 
 ```bash
 # Connector status
-../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci get_status \
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci get_status \
   --process_group_id "<PG_ID>"
 ```
 
@@ -706,7 +706,7 @@ Remove all resources created during setup to avoid ongoing charges.
 
 ```bash
 # Stop connector
-../venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci stop_flow --process_group_id "<PG_ID>"
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci stop_flow --process_group_id "<PG_ID>"
 
 # Delete connector from canvas
 ../venv/bin/python3 -c "
