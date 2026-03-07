@@ -5,8 +5,9 @@ description: >
   EventBridge with Snowflake Openflow and Snowpipe Streaming. Use this skill
   whenever the user wants to set up streaming data pipelines from AWS to
   Snowflake, deploy a Kinesis connector, configure Openflow on SPCS, ingest
-  real-time data into Snowflake from AWS, or build any AWS ↔ Snowflake
-  integration — even if they don't say "kiro-coco" explicitly.
+  real-time data into Snowflake from AWS, set up an Openflow canvas user, or
+  build any AWS ↔ Snowflake integration — even if they don't say "kiro-coco"
+  explicitly.
 ---
 
 # Kiro-CoCo: AWS + Snowflake Integrated Solutions
@@ -42,8 +43,8 @@ STEP 3: After user confirms, THEN run prerequisite checks:
 3. Check AWS profile: `aws sts get-caller-identity` — try default profile first
    - If fails, ask user for their AWS profile name
    - If succeeds, show account ID and ask user to confirm
-4. Check Snowflake connection: run `SKILL_DIR/venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SELECT CURRENT_ACCOUNT(), CURRENT_USER(), CURRENT_ROLE()" --format json`
-   - If fails, ask user which Snowflake connection to use (list available with `SKILL_DIR/venv/bin/snow connection list`)
+4. Check Snowflake connection: run `snow sql -c <SNOWFLAKE_CONNECTION> -q "SELECT CURRENT_ACCOUNT(), CURRENT_USER(), CURRENT_ROLE()" --format json`
+   - If fails, ask user which Snowflake connection to use (list available with `snow connection list`)
    - If succeeds, show account/user/role and ask user to confirm
 5. Show summary of both connections and ask "Does this look correct?" before proceeding
 
@@ -125,14 +126,14 @@ Each integration lives in its own sub-folder with a README and relevant artifact
 |--------|-------------|--------------|-------------------|
 | `kinesis-openflow/` | Kinesis → Openflow → Snowflake streaming ingestion | Kinesis, DynamoDB, CloudWatch | Openflow SPCS, Snowpipe Streaming |
 
+See also: `openflow-setup.md` — shared prerequisite covering Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup. Read this before starting any integration if Openflow isn't already configured.
+
 ## Conventions
 
 - Each sub-folder contains its own `README.md` with architecture, setup, and teardown steps
 - Each sub-folder has a `params.yaml` capturing all configurable values
-- Shared prerequisites (e.g., Openflow setup) live at the project root as `.md` files
-- CloudFormation/CDK templates go in the sub-folder
-- SQL scripts for Snowflake setup go in the sub-folder
-- All `snow` and `nipyapi` commands use the venv binaries (`venv/bin/snow`, `venv/bin/nipyapi`)
-- The `venv/` directory is local-only and should be gitignored
+- Shared prerequisites live at the project root as `.md` files (e.g., `openflow-setup.md`)
+- All `snow` commands use the system CLI (`snow`)
+- All `nipyapi` commands use `~/.snowflake/venv/nipyapi-env/bin/nipyapi`
 - Include cost estimates where applicable
 - Include cleanup instructions in every integration
