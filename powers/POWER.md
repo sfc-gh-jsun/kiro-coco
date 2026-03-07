@@ -23,16 +23,16 @@ STEP 2: After user selects an integration, load and display the workflow FIRST
   Skipping sections leads to missed prerequisites, wrong parameter values, and failed deployments.
 
 STEP 3: After user confirms, THEN run prerequisite checks:
-1. Check Python venv: if POWER_DIR/venv/ does not exist, create it and install dependencies:
-   python3 -m venv POWER_DIR/venv
-   POWER_DIR/venv/bin/pip install snowflake-cli nipyapi[cli]
-   If venv exists, verify: POWER_DIR/venv/bin/snow --version && POWER_DIR/venv/bin/nipyapi --help
+1. Check required CLIs:
+   - nipyapi: `~/.snowflake/venv/nipyapi-env/bin/nipyapi --help` — if missing, tell user to run:
+     `pip install nipyapi[cli]` in their nipyapi env (~/.snowflake/venv/nipyapi-env)
+   - snow: `snow --version` — if missing, help install via `pip install snowflake-cli`
 2. Check AWS CLI: `aws --version` — if missing, help install via `brew install awscli` or guide user
 3. Check AWS profile: `aws sts get-caller-identity` — try default profile first
    - If fails, ask user for their AWS profile name
    - If succeeds, show account ID and ask user to confirm
-4. Check Snowflake connection: use snowflake_sql_execute to run SELECT CURRENT_ACCOUNT(), CURRENT_USER(), CURRENT_ROLE()
-   - If fails, ask user which Snowflake connection to use
+4. Check Snowflake connection: run `snow sql -c <SNOWFLAKE_CONNECTION> -q "SELECT CURRENT_ACCOUNT(), CURRENT_USER(), CURRENT_ROLE()" --format json`
+   - If fails, ask user which Snowflake connection to use (list with `snow connection list`)
    - If succeeds, show account/user/role and ask user to confirm
 5. Show summary of both connections and ask "Does this look correct?" before proceeding
 
@@ -77,20 +77,42 @@ IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow
      SHOW GRANTS TO USER <current_user>;
    If the role is missing, grant it.
 
-IMPORTANT: For all snow/nipyapi commands in sub-powers, use the venv binaries:
-  POWER_DIR/venv/bin/snow
-  POWER_DIR/venv/bin/nipyapi
+IMPORTANT: For the canvas UI user setup step (Step 1e in kinesis-openflow):
+<OPENFLOW_ROLE> is a service role granted to internal runtime users (dpa, integration-secret, runtime-*).
+Do NOT use it for human canvas logins — create a separate <CANVAS_ROLE> instead.
+1. Discover SPCS service names:
+     SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
+   Identify the runtime service and data plane service names.
+2. Ask the user: "Do you need a dedicated user to log into the Openflow canvas UI? If so, provide a role name and username."
+3. If yes, create the canvas role with all required grants (Step 1e):
+   - GRANT SERVICE ROLE <runtime_service>!ALL_ENDPOINTS_USAGE TO ROLE <CANVAS_ROLE>
+   - GRANT SERVICE ROLE <dataplane_service>!ALL_ENDPOINTS_USAGE TO ROLE <CANVAS_ROLE>
+   - GRANT USAGE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>
+   - GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>
+   - GRANT USAGE ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>
+   - GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN
+   Create the user with DEFAULT_ROLE = <CANVAS_ROLE>.
+4. Canvas UI URL pattern: https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/
+   If OAuth blocks login, append ?role=<CANVAS_ROLE> to the URL.
+5. Privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN) are blocked by Snowflake OAuth —
+   the canvas user's default role must always be a non-privileged role.
+
+IMPORTANT: For all snow/nipyapi commands in sub-powers, use:
+  snow  (system CLI)
+  ~/.snowflake/venv/nipyapi-env/bin/nipyapi
+
+NOTE: Integration content lives one level up (../kinesis-openflow/, ../openflow-setup.md).
+The powers/ directory contains only the Kiro-specific POWER.md and power.json.
+Read files from POWER_DIR/../ when following sub-folder instructions.
 -->
 
 ## Prerequisites
 
 Before using any integration, verify both CLI tools and connections are working.
 
-**Python venv** (created in this power's directory):
+**nipyapi** (pre-installed at `~/.snowflake/venv/nipyapi-env`):
 ```bash
-# From the power directory (where POWER.md lives)
-python3 -m venv venv
-venv/bin/pip install snowflake-cli nipyapi[cli]
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --help
 ```
 
 **AWS CLI:**
@@ -101,28 +123,27 @@ aws sts get-caller-identity --profile <AWS_PROFILE>
 
 **Snowflake CLI:**
 ```bash
-venv/bin/snow --version
-venv/bin/snow connection test -c <SNOWFLAKE_CONNECTION>
+snow --version
+snow connection test -c <SNOWFLAKE_CONNECTION>
 ```
 
 If AWS CLI is missing: `brew install awscli` then `aws configure --profile <name>`
+If nipyapi is missing: `pip install nipyapi[cli]` in `~/.snowflake/venv/nipyapi-env`
 
-## Sub-folders
+## Integrations
 
-Each integration lives in its own sub-folder with a README and relevant artifacts.
+Integration content lives in the parent directory (`../`). This powers/ folder contains only the Kiro-specific manifest and instructions.
 
 | Folder | Integration | AWS Services | Snowflake Features |
 |--------|-------------|--------------|-------------------|
-| `kinesis-openflow/` | Kinesis → Openflow → Snowflake streaming ingestion | Kinesis, DynamoDB, CloudWatch | Openflow SPCS, Snowpipe Streaming |
+| `../kinesis-openflow/` | Kinesis → Openflow → Snowflake streaming ingestion | Kinesis, DynamoDB, CloudWatch | Openflow SPCS, Snowpipe Streaming |
+
+See also: `../openflow-setup.md` for Openflow runtime prerequisites.
 
 ## Conventions
 
-- Each sub-folder contains its own `README.md` with architecture, setup, and teardown steps
-- Each sub-folder has a `params.yaml` capturing all configurable values
-- Shared prerequisites (e.g., Openflow setup) live at the project root as `.md` files
-- CloudFormation/CDK templates go in the sub-folder
-- SQL scripts for Snowflake setup go in the sub-folder
-- All `snow` and `nipyapi` commands use the venv binaries (`venv/bin/snow`, `venv/bin/nipyapi`)
-- The `venv/` directory is local-only and should be gitignored
+- Integration content (README, params.yaml) lives at `../` relative to this file
+- Shared prerequisites live at `../openflow-setup.md`
+- All `snow` and `nipyapi` commands use system `snow` and `~/.snowflake/venv/nipyapi-env/bin/nipyapi`
 - Include cost estimates where applicable
 - Include cleanup instructions in every integration
