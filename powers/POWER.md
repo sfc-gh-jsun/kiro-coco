@@ -141,7 +141,7 @@ Integration content lives in the parent directory (`../`). This powers/ folder c
 |--------|-------------|--------------|-------------------|
 | `../kinesis-openflow/` | Kinesis → Openflow → Snowflake streaming ingestion | Kinesis, DynamoDB, CloudWatch | Openflow SPCS, Snowpipe Streaming |
 
-See also: `../openflow-setup.md` for Openflow runtime prerequisites.
+See also: `../openflow-setup.md` — shared prerequisite covering Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup. Read this before starting any integration if Openflow isn't already configured.
 
 ## Conventions
 
