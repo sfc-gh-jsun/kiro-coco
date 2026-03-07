@@ -59,6 +59,24 @@ EventBridge rule, IAM role, etc.), first check if it already exists:
 If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. Use it, or create a new one with a different name?"
 Only create new resources after user confirms.
 
+IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow):
+1. Discover the existing role by running:
+     SHOW OPENFLOW DATA PLANE INTEGRATIONS;
+   Then for each integration:
+     SHOW GRANTS ON INTEGRATION <integration_name>;
+   Find the role with OWNERSHIP — this is the candidate <OPENFLOW_ROLE>.
+2. Verify the role is granted to runtime service users:
+     SHOW GRANTS OF ROLE <candidate_role>;
+   Filter for USER grants where grantee_name matches: dpa, integration-secret, runtime-*
+3. Present the discovered role to the user: "Found role '<role>' with grants to runtime service users. Use this as <OPENFLOW_ROLE>?"
+4. If confirmed, use that role. If the user wants a dedicated role, follow the 1c production path.
+5. The Openflow runtime integration names come from:
+     SHOW OPENFLOW RUNTIME INTEGRATIONS;
+   Use these actual integration names (not placeholders) when granting.
+6. After confirming the role, verify the user has it:
+     SHOW GRANTS TO USER <current_user>;
+   If the role is missing, grant it.
+
 IMPORTANT: For all snow/nipyapi commands in sub-skills, use the venv binaries:
   SKILL_DIR/venv/bin/snow
   SKILL_DIR/venv/bin/nipyapi
