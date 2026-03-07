@@ -376,47 +376,42 @@ CREATE WAREHOUSE IF NOT EXISTS <WAREHOUSE>
 GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
 ```
 
-**1e. Create a dedicated canvas UI user (for humans who need to log into the NiFi canvas):**
+**1e. Create a canvas UI user (for humans who need to log into the NiFi canvas):**
 
-> `<OPENFLOW_ROLE>` is a service role granted to internal runtime users (`dpa`, `integration-secret`, `runtime-*`). Do **not** use it for human canvas logins — create a separate `<CANVAS_ROLE>` instead.
+> **`<OPENFLOW_ROLE>` already has canvas UI access** — it owns the data plane integration and already has `ALL_ENDPOINTS_USAGE` on the SPCS services. For demos and development, simply grant `<OPENFLOW_ROLE>` to the user. Only create a separate `<CANVAS_ROLE>` for production least-privilege isolation.
 >
 > Privileged roles (`ACCOUNTADMIN`, `SECURITYADMIN`, `ORGADMIN`) are blocked by Snowflake's OAuth. The canvas user's default role must be a non-privileged role.
 
-First, discover the SPCS service names:
+**Option A — Demo/Dev (recommended): reuse `<OPENFLOW_ROLE>`**
 
 ```sql
-SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
+CREATE USER IF NOT EXISTS <CANVAS_USER>
+  PASSWORD          = '<PASSWORD>'
+  DEFAULT_ROLE      = <OPENFLOW_ROLE>
+  MUST_CHANGE_PASSWORD = FALSE;
+
+GRANT ROLE <OPENFLOW_ROLE> TO USER <CANVAS_USER>;
 ```
 
-Note the runtime service and data plane service names, then create the canvas role with all required grants:
+**Option B — Production: create a dedicated least-privilege `<CANVAS_ROLE>`**
 
 ```sql
 USE ROLE ACCOUNTADMIN;
 
 CREATE ROLE IF NOT EXISTS <CANVAS_ROLE>;
 
--- Canvas UI endpoint access (runtime service)
+-- Canvas UI endpoint access (runtime + data plane services)
 GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
   TO ROLE <CANVAS_ROLE>;
-
--- Data plane endpoint access
 GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE
   TO ROLE <CANVAS_ROLE>;
 
--- Runtime integration access
-GRANT USAGE   ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>;
-GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>;
-
--- Data plane integration access
-GRANT USAGE ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>;
-
--- Allow ACCOUNTADMIN to manage this role
+-- Integration access
+GRANT USAGE   ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
+GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
+GRANT USAGE   ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>;
 GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN;
-```
 
-Create the user:
-
-```sql
 CREATE USER IF NOT EXISTS <CANVAS_USER>
   PASSWORD          = '<PASSWORD>'
   DEFAULT_ROLE      = <CANVAS_ROLE>
@@ -427,9 +422,9 @@ GRANT ROLE <CANVAS_ROLE> TO USER <CANVAS_USER>;
 
 Log in at: `https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/`
 
-If OAuth blocks the login, append `?role=<CANVAS_ROLE>` to the URL.
+If OAuth blocks the login, append `?role=<OPENFLOW_ROLE>` (or `?role=<CANVAS_ROLE>`) to the URL.
 
-> See `../openflow-setup.md` Section 5 for full reference and discovery steps.
+> See `../openflow-setup.md` Section 5 for full discovery steps and grant reference.
 
 ### Step 2: Create Snowflake Target Table
 

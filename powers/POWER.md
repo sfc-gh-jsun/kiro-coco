@@ -78,22 +78,21 @@ IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow
    If the role is missing, grant it.
 
 IMPORTANT: For the canvas UI user setup step (Step 1e in kinesis-openflow):
-<OPENFLOW_ROLE> is a service role granted to internal runtime users (dpa, integration-secret, runtime-*).
-Do NOT use it for human canvas logins — create a separate <CANVAS_ROLE> instead.
-1. Discover SPCS service names:
-     SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
-   Identify the runtime service and data plane service names.
-2. Ask the user: "Do you need a dedicated user to log into the Openflow canvas UI? If so, provide a role name and username."
-3. If yes, create the canvas role with all required grants (Step 1e):
+<OPENFLOW_ROLE> already owns the data plane integration and has ALL_ENDPOINTS_USAGE on the SPCS
+services — it already satisfies all canvas UI access requirements.
+1. Ask the user: "Do you need a user to log into the Openflow canvas UI? If so, provide a username."
+2. For demos/dev (Option A): simply create the user with DEFAULT_ROLE = <OPENFLOW_ROLE>:
+     CREATE USER <CANVAS_USER> PASSWORD='...' DEFAULT_ROLE=<OPENFLOW_ROLE>;
+     GRANT ROLE <OPENFLOW_ROLE> TO USER <CANVAS_USER>;
+3. For production (Option B): create a separate <CANVAS_ROLE> with minimal grants:
+   - SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT; (discover service names)
    - GRANT SERVICE ROLE <runtime_service>!ALL_ENDPOINTS_USAGE TO ROLE <CANVAS_ROLE>
    - GRANT SERVICE ROLE <dataplane_service>!ALL_ENDPOINTS_USAGE TO ROLE <CANVAS_ROLE>
-   - GRANT USAGE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>
-   - GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>
+   - GRANT USAGE + OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>
    - GRANT USAGE ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>
-   - GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN
-   Create the user with DEFAULT_ROLE = <CANVAS_ROLE>.
+   Then create the user with DEFAULT_ROLE = <CANVAS_ROLE>.
 4. Canvas UI URL pattern: https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/
-   If OAuth blocks login, append ?role=<CANVAS_ROLE> to the URL.
+   If OAuth blocks login, append ?role=<OPENFLOW_ROLE> (or ?role=<CANVAS_ROLE>) to the URL.
 5. Privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN) are blocked by Snowflake OAuth —
    the canvas user's default role must always be a non-privileged role.
 
