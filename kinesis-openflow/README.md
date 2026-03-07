@@ -45,6 +45,8 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | `<TABLE_NAME>` | Snowflake destination table | `RAW_EVENTS` |
 | `<WAREHOUSE>` | Snowflake warehouse for Openflow | `OPENFLOW_WH` |
 | `<OPENFLOW_ROLE>` | Snowflake role identified in Step 1 (owns Openflow deployment, granted to runtime service users) | `KINESIS_OPENFLOW_RL` |
+| `<CANVAS_ROLE>` | Dedicated role for humans to log into the Openflow canvas UI | `KINESIS_CANVAS_RL` |
+| `<CANVAS_USER>` | Snowflake user who will log into the canvas UI | `kinesis_openflow_user` |
 | `<OPENFLOW_PROFILE>` | nipyapi profile for Openflow runtime | `my_openflow` |
 | `<PG_ID>` | Openflow process group ID (after deploy) | *(from deploy output)* |
 
@@ -362,12 +364,9 @@ GRANT MONITOR ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <OPENFLOW_
 GRANT USAGE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <OPENFLOW_ROLE>;
 ```
 
-**1d. Ensure your user has the role and warehouse access:**
+**1d. Ensure warehouse exists and is granted to the connector role:**
 
 ```sql
--- Grant role to your user (for OAuth login to NiFi UI)
-GRANT ROLE <OPENFLOW_ROLE> TO USER <YOUR_USER>;
-
 -- Ensure warehouse exists and is granted
 CREATE WAREHOUSE IF NOT EXISTS <WAREHOUSE>
   WAREHOUSE_SIZE = 'XSMALL'
@@ -377,7 +376,60 @@ CREATE WAREHOUSE IF NOT EXISTS <WAREHOUSE>
 GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
 ```
 
-> **Why this matters:** The role must be granted to the runtime service users for the connector to authenticate. Privileged roles (`ACCOUNTADMIN`, `SECURITYADMIN`, `ORGADMIN`) are blocked by Snowflake's OAuth — you cannot use them to log into the NiFi UI.
+**1e. Create a dedicated canvas UI user (for humans who need to log into the NiFi canvas):**
+
+> `<OPENFLOW_ROLE>` is a service role granted to internal runtime users (`dpa`, `integration-secret`, `runtime-*`). Do **not** use it for human canvas logins — create a separate `<CANVAS_ROLE>` instead.
+>
+> Privileged roles (`ACCOUNTADMIN`, `SECURITYADMIN`, `ORGADMIN`) are blocked by Snowflake's OAuth. The canvas user's default role must be a non-privileged role.
+
+First, discover the SPCS service names:
+
+```sql
+SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
+```
+
+Note the runtime service and data plane service names, then create the canvas role with all required grants:
+
+```sql
+USE ROLE ACCOUNTADMIN;
+
+CREATE ROLE IF NOT EXISTS <CANVAS_ROLE>;
+
+-- Canvas UI endpoint access (runtime service)
+GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
+  TO ROLE <CANVAS_ROLE>;
+
+-- Data plane endpoint access
+GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE
+  TO ROLE <CANVAS_ROLE>;
+
+-- Runtime integration access
+GRANT USAGE   ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+
+-- Data plane integration access
+GRANT USAGE ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+
+-- Allow ACCOUNTADMIN to manage this role
+GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN;
+```
+
+Create the user:
+
+```sql
+CREATE USER IF NOT EXISTS <CANVAS_USER>
+  PASSWORD          = '<PASSWORD>'
+  DEFAULT_ROLE      = <CANVAS_ROLE>
+  MUST_CHANGE_PASSWORD = FALSE;
+
+GRANT ROLE <CANVAS_ROLE> TO USER <CANVAS_USER>;
+```
+
+Log in at: `https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/`
+
+If OAuth blocks the login, append `?role=<CANVAS_ROLE>` to the URL.
+
+> See `../openflow-setup.md` Section 5 for full reference and discovery steps.
 
 ### Step 2: Create Snowflake Target Table
 

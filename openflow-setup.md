@@ -114,3 +114,68 @@ venv/bin/nipyapi --profile <OPENFLOW_PROFILE> system get_nifi_version_info
 | Returns NiFi version | Profile is ready — set `OPENFLOW_PROFILE` in `params.yaml` |
 | 401/403 error | Token expired — regenerate bearer token |
 | Connection refused | Runtime may be stopped — check Openflow Control Plane UI |
+
+---
+
+## 5. Create Canvas UI User (Optional)
+
+If a Snowflake user needs to log into the Openflow canvas UI (NiFi UI) to create or manage flows, they need a dedicated non-privileged role with the correct service role grants.
+
+> **Why non-privileged:** Snowflake's OAuth blocks privileged roles (`ACCOUNTADMIN`, `SECURITYADMIN`, `ORGADMIN`) from logging into SPCS services. The user's default role must be a regular role.
+
+### Step 1: Discover SPCS service names
+
+```sql
+SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
+```
+
+Note the two service names — a runtime service and a data plane service. Both will have an `ALL_ENDPOINTS_USAGE` service role.
+
+### Step 2: Create role and grant permissions
+
+```sql
+USE ROLE ACCOUNTADMIN;
+
+CREATE ROLE IF NOT EXISTS <CANVAS_ROLE>;
+
+-- Canvas UI endpoint access (runtime service)
+GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
+  TO ROLE <CANVAS_ROLE>;
+
+-- Data plane endpoint access
+GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE
+  TO ROLE <CANVAS_ROLE>;
+
+-- Runtime integration access
+GRANT USAGE   ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+
+-- Data plane integration access
+GRANT USAGE ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+
+-- Optional: allow ACCOUNTADMIN to manage this role
+GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN;
+```
+
+### Step 3: Create user
+
+```sql
+CREATE USER IF NOT EXISTS <USERNAME>
+  PASSWORD          = '<PASSWORD>'
+  DEFAULT_ROLE      = <CANVAS_ROLE>
+  MUST_CHANGE_PASSWORD = FALSE;
+
+GRANT ROLE <CANVAS_ROLE> TO USER <USERNAME>;
+```
+
+### Step 4: Log in
+
+The canvas URL for an SPCS runtime follows this pattern:
+
+```
+https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/
+```
+
+Open the URL — Snowflake OAuth handles login and redirects back to the canvas.
+
+**If OAuth blocks the login**, append `?role=<CANVAS_ROLE>` to the URL to force the correct role.
