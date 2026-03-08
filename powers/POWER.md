@@ -139,6 +139,11 @@ snow connection test -c <SNOWFLAKE_CONNECTION>
 If AWS CLI is missing: `brew install awscli` then `aws configure --profile <name>`
 If nipyapi is missing: `pip install nipyapi[cli]` in `~/kiro-coco-venv`
 
+**Recommended Hooks:**
+See `steering/hooks.md` for an `aws-profile-guard` hook that blocks any `aws` command
+missing `--profile`, preventing accidental operations against the wrong AWS account.
+Includes installation instructions for both Kiro and Claude Code.
+
 ## Integrations
 
 | Integration | Guide | AWS Services | Snowflake Features |
@@ -152,6 +157,7 @@ See also: `steering/openflow-setup.md` — shared prerequisite covering Openflow
 - **kinesis-openflow** - Full setup guide for Kinesis → Openflow → Snowflake streaming ingestion: architecture, step-by-step deployment, parameter reference, and teardown
 - **kinesis-openflow-params** - Configurable parameters for the Kinesis-Openflow integration
 - **openflow-setup** - Shared prerequisite: Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup
+- **hooks** - Recommended safety hooks: aws-profile-guard blocks AWS commands missing --profile, with install instructions for Kiro and Claude Code
 
 ## Conventions
 
