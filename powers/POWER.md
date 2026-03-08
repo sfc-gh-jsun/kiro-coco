@@ -1,3 +1,11 @@
+---
+name: "kiro-coco"
+displayName: "Kiro-CoCo: AWS + Snowflake Integrations"
+description: "AWS + Snowflake integrated solutions combining Kinesis, Lambda, DynamoDB, and EventBridge with Snowflake Openflow and Snowpipe Streaming. Use when setting up streaming pipelines from AWS to Snowflake, deploying Kinesis connectors, configuring Openflow on SPCS, or setting up an Openflow canvas user."
+keywords: ["aws", "snowflake", "kinesis", "openflow", "streaming", "pipeline", "ingestion"]
+author: "James Sun"
+---
+
 # Kiro-CoCo: AWS + Snowflake Integrated Solutions
 
 Integrated solutions combining AWS services with Snowflake, built collaboratively between Kiro (AWS) and CoCo (Snowflake).
@@ -8,7 +16,7 @@ On power activation, follow this workflow:
 POWER_DIR is the directory containing this POWER.md file.
 
 STEP 1: Show available integrations FIRST
-- Read the Sub-folders table below and present the available integrations to the user
+- Read the Integrations table below and present the available integrations to the user
 - Use AskUserQuestion with options built from the table
   Example: "Kinesis + Openflow streaming ingestion"
 - Let the user select which integration they want to work with
@@ -104,9 +112,7 @@ IMPORTANT: For all snow/nipyapi commands in sub-powers, use:
   snow  (system CLI)
   ~/.snowflake/venv/nipyapi-env/bin/nipyapi
 
-NOTE: Integration content lives one level up (../kinesis-openflow/, ../openflow-setup.md).
-The powers/ directory contains only the Kiro-specific POWER.md and power.json.
-Read files from POWER_DIR/../ when following sub-folder instructions.
+NOTE: Integration content lives in POWER_DIR/steering/. Read files from there when following integration instructions.
 -->
 
 ## Prerequisites
@@ -135,18 +141,34 @@ If nipyapi is missing: `pip install nipyapi[cli]` in `~/.snowflake/venv/nipyapi-
 
 ## Integrations
 
-Integration content lives in the parent directory (`../`). This powers/ folder contains only the Kiro-specific manifest and instructions.
+| Integration | Guide | AWS Services | Snowflake Features |
+|-------------|-------|--------------|-------------------|
+| Kinesis → Openflow → Snowflake streaming ingestion | `steering/kinesis-openflow.md` | Kinesis, DynamoDB, CloudWatch | Openflow SPCS, Snowpipe Streaming |
 
-| Folder | Integration | AWS Services | Snowflake Features |
-|--------|-------------|--------------|-------------------|
-| `../kinesis-openflow/` | Kinesis → Openflow → Snowflake streaming ingestion | Kinesis, DynamoDB, CloudWatch | Openflow SPCS, Snowpipe Streaming |
+See also: `steering/openflow-setup.md` — shared prerequisite covering Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup. Read this before starting any integration if Openflow isn't already configured.
 
-See also: `../openflow-setup.md` — shared prerequisite covering Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup. Read this before starting any integration if Openflow isn't already configured.
+## Available Steering Files
+
+- **kinesis-openflow** - Full setup guide for Kinesis → Openflow → Snowflake streaming ingestion: architecture, step-by-step deployment, parameter reference, and teardown
+- **kinesis-openflow-params** - Configurable parameters for the Kinesis-Openflow integration
+- **openflow-setup** - Shared prerequisite: Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup
 
 ## Conventions
 
-- Integration content (README, params.yaml) lives at `../` relative to this file
-- Shared prerequisites live at `../openflow-setup.md`
+- Integration content (guides, params) lives in `steering/` relative to this file
+- Shared prerequisites live at `steering/openflow-setup.md`
 - All `snow` and `nipyapi` commands use system `snow` and `~/.snowflake/venv/nipyapi-env/bin/nipyapi`
 - Include cost estimates where applicable
 - Include cleanup instructions in every integration
+
+## License & Attribution
+
+**License:** MIT
+
+**Power Author:** James Sun
+
+**Original Work:** This power is derived from the [kiro-coco](https://github.com/sfc-gh-jsun/claude-skills) Claude Code skill.
+
+**Source Version:** Based on v1.0.4.
+
+**Update Frequency:** This power is updated as new AWS-Snowflake integrations are added or existing ones are revised.
