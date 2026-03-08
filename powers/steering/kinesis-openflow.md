@@ -528,7 +528,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ```bash
 # Prerequisite: Openflow must be configured (see openflow-setup.md)
 # Deploy connector from registry
-~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci deploy_flow \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci deploy_flow \
   --registry_client ConnectorFlowRegistryClient \
   --bucket connectors \
   --flow kinesis
@@ -537,7 +537,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ### Step 5: Configure Connector Parameters
 
 ```bash
-~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
   --process_group_id "<PG_ID>" \
   --parameters '{
     "AWS Access Key ID": "<AWS_ACCESS_KEY>",
@@ -556,7 +556,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ### Step 6: Start Connector
 
 ```bash
-~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
   --process_group_id "<PG_ID>"
 ```
 
@@ -564,7 +564,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 
 ```bash
 # Connector status
-~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci get_status \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci get_status \
   --process_group_id "<PG_ID>"
 ```
 
@@ -777,10 +777,10 @@ Remove all resources created during setup to avoid ongoing charges.
 
 ```bash
 # Stop connector
-~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci stop_flow --process_group_id "<PG_ID>"
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci stop_flow --process_group_id "<PG_ID>"
 
 # Delete connector from canvas
-~/.snowflake/venv/nipyapi-env/bin/python3 -c "
+~/kiro-coco-venv/bin/python3 -c "
 import nipyapi
 nipyapi.profiles.switch('<OPENFLOW_PROFILE>')
 pg = nipyapi.canvas.get_process_group('<PG_ID>', 'id')

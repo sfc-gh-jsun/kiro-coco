@@ -36,8 +36,8 @@ STEP 2: After user selects an integration, load and display the workflow FIRST
 
 STEP 3: After user confirms, THEN run prerequisite checks:
 1. Check required CLIs:
-   - nipyapi: `~/.snowflake/venv/nipyapi-env/bin/nipyapi --help` — if missing, tell user to run:
-     `pip install nipyapi[cli]` in their nipyapi env (~/.snowflake/venv/nipyapi-env)
+   - nipyapi: `~/kiro-coco-venv/bin/nipyapi --help` — if missing, tell user to run:
+     `pip install nipyapi[cli]` in their nipyapi env (~/kiro-coco-venv)
    - snow: `snow --version` — if missing, help install via `pip install snowflake-cli`
 2. Check AWS CLI: `aws --version` — if missing, help install via `brew install awscli` or guide user
 3. Check AWS profile: `aws sts get-caller-identity` — try default profile first
@@ -91,16 +91,16 @@ IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow
 
 IMPORTANT: For all snow/nipyapi commands in sub-skills, use:
   snow  (system CLI)
-  ~/.snowflake/venv/nipyapi-env/bin/nipyapi
+  ~/kiro-coco-venv/bin/nipyapi
 -->
 
 ## Prerequisites
 
 Before using any integration, verify both CLI tools and connections are working.
 
-**nipyapi** (pre-installed at `~/.snowflake/venv/nipyapi-env`):
+**nipyapi** (pre-installed at `~/kiro-coco-venv`):
 ```bash
-~/.snowflake/venv/nipyapi-env/bin/nipyapi --help
+~/kiro-coco-venv/bin/nipyapi --help
 ```
 
 **AWS CLI:**
@@ -116,7 +116,7 @@ snow connection test -c <SNOWFLAKE_CONNECTION>
 ```
 
 If AWS CLI is missing: `brew install awscli` then `aws configure --profile <name>`
-If nipyapi is missing: `pip install nipyapi[cli]` in `~/.snowflake/venv/nipyapi-env`
+If nipyapi is missing: `pip install nipyapi[cli]` in `~/kiro-coco-venv`
 
 ## Sub-folders
 
@@ -134,6 +134,6 @@ See also: `openflow-setup.md` — shared prerequisite covering Openflow runtime 
 - Each sub-folder has a `params.yaml` capturing all configurable values
 - Shared prerequisites live at the project root as `.md` files (e.g., `openflow-setup.md`)
 - All `snow` commands use the system CLI (`snow`)
-- All `nipyapi` commands use `~/.snowflake/venv/nipyapi-env/bin/nipyapi`
+- All `nipyapi` commands use `~/kiro-coco-venv/bin/nipyapi`
 - Include cost estimates where applicable
 - Include cleanup instructions in every integration

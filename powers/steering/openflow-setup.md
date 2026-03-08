@@ -2,15 +2,15 @@
 
 Minimal steps to get an Openflow runtime accessible via nipyapi.
 
-> All `snow` and `nipyapi` commands below use the system `snow` CLI and `~/.snowflake/venv/nipyapi-env/bin/nipyapi`.
+> All `snow` and `nipyapi` commands below use the system `snow` CLI and `~/kiro-coco-venv/bin/nipyapi`.
 
 ## 1. Verify tooling
 
 ```bash
-snow --version && ~/.snowflake/venv/nipyapi-env/bin/nipyapi --help > /dev/null && echo "OK"
+snow --version && ~/kiro-coco-venv/bin/nipyapi --help > /dev/null && echo "OK"
 ```
 
-If nipyapi is missing, install it: `pip install nipyapi[cli]` in `~/.snowflake/venv/nipyapi-env`.
+If nipyapi is missing, install it: `pip install nipyapi[cli]` in `~/kiro-coco-venv`.
 
 ## 2. Discover deployments and runtimes
 

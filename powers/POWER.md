@@ -32,8 +32,8 @@ STEP 2: After user selects an integration, load and display the workflow FIRST
 
 STEP 3: After user confirms, THEN run prerequisite checks:
 1. Check required CLIs:
-   - nipyapi: `~/.snowflake/venv/nipyapi-env/bin/nipyapi --help` — if missing, tell user to run:
-     `pip install nipyapi[cli]` in their nipyapi env (~/.snowflake/venv/nipyapi-env)
+   - nipyapi: `~/kiro-coco-venv/bin/nipyapi --help` — if missing, tell user to run:
+     `pip install nipyapi[cli]` in their nipyapi env (~/kiro-coco-venv)
    - snow: `snow --version` — if missing, help install via `pip install snowflake-cli`
 2. Check AWS CLI: `aws --version` — if missing, help install via `brew install awscli` or guide user
 3. Check AWS profile: `aws sts get-caller-identity` — try default profile first
@@ -110,7 +110,7 @@ IMPORTANT: For the canvas UI user setup step (Step 1e in kinesis-openflow):
 
 IMPORTANT: For all snow/nipyapi commands in sub-powers, use:
   snow  (system CLI)
-  ~/.snowflake/venv/nipyapi-env/bin/nipyapi
+  ~/kiro-coco-venv/bin/nipyapi
 
 NOTE: Integration content lives in POWER_DIR/steering/. Read files from there when following integration instructions.
 -->
@@ -119,9 +119,9 @@ NOTE: Integration content lives in POWER_DIR/steering/. Read files from there wh
 
 Before using any integration, verify both CLI tools and connections are working.
 
-**nipyapi** (pre-installed at `~/.snowflake/venv/nipyapi-env`):
+**nipyapi** (pre-installed at `~/kiro-coco-venv`):
 ```bash
-~/.snowflake/venv/nipyapi-env/bin/nipyapi --help
+~/kiro-coco-venv/bin/nipyapi --help
 ```
 
 **AWS CLI:**
@@ -137,7 +137,7 @@ snow connection test -c <SNOWFLAKE_CONNECTION>
 ```
 
 If AWS CLI is missing: `brew install awscli` then `aws configure --profile <name>`
-If nipyapi is missing: `pip install nipyapi[cli]` in `~/.snowflake/venv/nipyapi-env`
+If nipyapi is missing: `pip install nipyapi[cli]` in `~/kiro-coco-venv`
 
 ## Integrations
 
@@ -157,7 +157,7 @@ See also: `steering/openflow-setup.md` — shared prerequisite covering Openflow
 
 - Integration content (guides, params) lives in `steering/` relative to this file
 - Shared prerequisites live at `steering/openflow-setup.md`
-- All `snow` and `nipyapi` commands use system `snow` and `~/.snowflake/venv/nipyapi-env/bin/nipyapi`
+- All `snow` and `nipyapi` commands use system `snow` and `~/kiro-coco-venv/bin/nipyapi`
 - Include cost estimates where applicable
 - Include cleanup instructions in every integration
 
