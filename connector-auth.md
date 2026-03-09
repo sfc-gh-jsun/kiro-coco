@@ -106,6 +106,33 @@ via customer SQL DDL.
 | **Discovery** | `SHOW GRANTS ON INTEGRATION → OWNERSHIP` | Named by user during setup |
 | **User involvement** | None (skill handles silently) | User chooses name + password |
 
+### What each role can access
+
+**Base role** (`<OPENFLOW_BASE_ROLE>`) — data access only:
+```sql
+GRANT USAGE  ON DATABASE <DB_NAME>           TO ROLE <OPENFLOW_BASE_ROLE>;
+GRANT USAGE  ON SCHEMA   <DB_NAME>.PUBLIC    TO ROLE <OPENFLOW_BASE_ROLE>;
+GRANT INSERT, SELECT ON TABLE <DB_NAME>.PUBLIC.<TABLE> TO ROLE <OPENFLOW_BASE_ROLE>;
+GRANT USAGE  ON WAREHOUSE <WAREHOUSE>        TO ROLE <OPENFLOW_BASE_ROLE>;
+-- No canvas/SPCS access
+```
+
+**Canvas role** (`<CANVAS_ROLE>`) — UI access only:
+```sql
+GRANT SERVICE ROLE <DB>.<SCHEMA>.<RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE   TO ROLE <CANVAS_ROLE>;
+GRANT SERVICE ROLE <DB>.<SCHEMA>.<DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE TO ROLE <CANVAS_ROLE>;
+GRANT USAGE   ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
+GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
+GRANT USAGE   ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+-- No database, table, or warehouse access
+```
+
+**Canvas user** (`<CANVAS_USER>`):
+- Default role = `<CANVAS_ROLE>`
+- Can log into the NiFi canvas UI and operate flows
+- Has zero access to the Snowflake data written by the connector
+- Complete isolation from the data layer
+
 ---
 
 ## Practical Implications for kiro-coco
