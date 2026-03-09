@@ -180,6 +180,7 @@ See also: `steering/openflow-setup.md` — shared prerequisite covering Openflow
 - **kinesis-openflow** - Full setup guide for Kinesis → Openflow → Snowflake streaming ingestion: architecture, step-by-step deployment, parameter reference, and teardown
 - **kinesis-openflow-params** - Configurable parameters for the Kinesis-Openflow integration
 - **openflow-setup** - Shared prerequisite: Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup
+- **connector-auth** - Openflow connector authentication architecture: how the base role works, OAuth identity flow, why the base role must be used for Snowpipe Streaming writes
 - **hooks** - Recommended safety hooks: aws-profile-guard blocks AWS commands missing --profile, with install instructions for Kiro and Claude Code
 
 ## Conventions

@@ -99,35 +99,30 @@ Only create new resources after user confirms.
 
 IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow):
 
-**Two-role pattern (critical):**
-- CONNECTOR ROLE = the role with OWNERSHIP of the data plane integration. This is the role the
-  Openflow runtime service users (dpa, integration-secret, runtime-*) are already granted.
-  It MUST be used as the "Snowflake Role" parameter in Step 5.
-- CANVAS ROLE = a new dedicated role created for human canvas UI access only. This is NOT used
-  as the connector role. It gets endpoint access on the SPCS services.
+**Two-role pattern:**
+- BASE ROLE = the pre-existing customer role that owns the Openflow data plane integration.
+  The Openflow runtime authenticates via OAuth as this role. Discovered automatically —
+  the user never needs to know its name. Use it as the "Snowflake Role" in Step 5.
+- CANVAS ROLE = a new dedicated role created for human canvas UI access only.
 
-**Why you cannot use a new role as the connector role:**
-The service users (dpa, integration-secret, runtime-*) are Snowflake-internal system users
-managed by the Openflow platform. They cannot receive additional role grants via regular SQL DDL.
-The connector role must be the pre-existing OWNERSHIP role — whatever it is called in this
-environment (ADF_PL_RL, OPENFLOW_RL, etc.).
-
-1. Discover the existing role by running:
-     SHOW OPENFLOW DATA PLANE INTEGRATIONS;
-   Then for each integration:
-     SHOW GRANTS ON INTEGRATION <integration_name>;
-   Find the role with OWNERSHIP — this is <OPENFLOW_ROLE> (the connector role).
-2. Verify the role is granted to runtime service users:
-     SHOW GRANTS OF ROLE <OPENFLOW_ROLE>;
-   Filter for USER grants where grantee_name matches: dpa, integration-secret, runtime-*
-3. Present the discovered role to the user: "Found connector role '<role>'. This will be used
-   as the Snowflake Role for Snowpipe Streaming writes."
-4. The Openflow runtime integration names come from:
-     SHOW OPENFLOW RUNTIME INTEGRATIONS;
-   Use these actual integration names (not placeholders) when granting.
-5. After confirming the connector role, verify the current user has it:
+**How to discover and use the base role (do this silently — no user involvement needed):**
+1. Run: SHOW OPENFLOW DATA PLANE INTEGRATIONS;
+   Then: SHOW GRANTS ON INTEGRATION <integration_name>;
+   Find OWNERSHIP → this is <BASE_ROLE>.
+2. Grant data privileges directly to <BASE_ROLE>:
+     GRANT USAGE ON DATABASE <DB_NAME> TO ROLE <BASE_ROLE>;
+     GRANT USAGE ON SCHEMA <DB_NAME>.PUBLIC TO ROLE <BASE_ROLE>;
+     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ... TO ROLE <BASE_ROLE>;
+     GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <BASE_ROLE>;
+3. Use <BASE_ROLE> as the "Snowflake Role" parameter in Step 5.
+4. Verify the current user has <BASE_ROLE>:
      SHOW GRANTS TO USER <current_user>;
-   If the role is missing, grant it.
+   If missing, grant it: GRANT ROLE <BASE_ROLE> TO USER <current_user>;
+5. The Openflow runtime integration names come from:
+     SHOW OPENFLOW RUNTIME INTEGRATIONS;
+   Use these actual names (not placeholders) when granting.
+
+See steering/connector-auth.md for the full architecture explanation.
 
 IMPORTANT: Always create a canvas user (Step 1e) — this is REQUIRED, not optional:
 - Create a new dedicated <CANVAS_ROLE> (e.g., <prefix>_CANVAS_RL)
