@@ -182,21 +182,22 @@ This skill does not cover Openflow installation — it assumes a running deploym
 
 ```bash
 # Create ON_DEMAND stream (no shard provisioning needed)
+# Note: create-stream is async — it may appear to hang on AWS CLI v1. This is normal.
+# The stream is created on AWS regardless; always verify status separately.
 aws kinesis create-stream \
   --stream-name <STREAM_NAME> \
   --stream-mode-config StreamMode=ON_DEMAND \
   --region <AWS_REGION> \
-  --profile <AWS_PROFILE>
+  --profile <AWS_PROFILE> 2>&1 || true
 
-# Wait for stream to become ACTIVE
-aws kinesis describe-stream \
+# Wait for stream to become ACTIVE (polls every 10s, ~3 min timeout)
+aws kinesis wait stream-exists \
   --stream-name <STREAM_NAME> \
   --region <AWS_REGION> \
-  --profile <AWS_PROFILE> \
-  --query 'StreamDescription.StreamStatus'
+  --profile <AWS_PROFILE> && echo "Stream is ACTIVE"
 ```
 
-**Expected output:** `"ACTIVE"` (takes ~30 seconds)
+**If `create-stream` hangs:** Ctrl-C and run the `wait stream-exists` command directly — if the stream already exists it returns immediately.
 
 ### Step 0b: Run Local Producer
 
