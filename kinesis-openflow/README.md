@@ -309,6 +309,20 @@ pip install boto3 requests
 python3 /tmp/opensky_producer.py
 ```
 
+> **Tip: Run continuously in the background with a 30s interval**
+> Change `POLL_INTERVAL = 10` to `POLL_INTERVAL = 30` in the script, then:
+> ```bash
+> # Run in background, log to file
+> nohup python3 /tmp/opensky_producer.py > /tmp/opensky_producer.log 2>&1 &
+> echo "Producer PID: $!"
+>
+> # Monitor output
+> tail -f /tmp/opensky_producer.log
+>
+> # Stop the producer
+> kill <PID>
+> ```
+
 **Expected output:**
 ```
 Starting OpenSky producer...
