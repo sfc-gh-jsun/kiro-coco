@@ -426,7 +426,13 @@ CREATE WAREHOUSE IF NOT EXISTS <WAREHOUSE>
 GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
 ```
 
-**1e. Create a canvas UI user (REQUIRED)**
+**1e. Create a canvas UI user — MANDATORY, DO NOT SKIP**
+
+> ⚠️ **This step is MANDATORY. Do NOT skip it, even for demos or quick tests.**
+> The base `<OPENFLOW_ROLE>` is for connector service authentication only — it must NOT be used
+> for human UI login. Privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN) are blocked by
+> Snowflake OAuth. A dedicated canvas role + canvas user with a non-privileged default role is
+> always required for NiFi canvas access.
 
 A dedicated canvas user must always be created. This separates human UI access from the connector's
 service authentication and avoids using privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN
