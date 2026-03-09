@@ -42,9 +42,29 @@ STEP 3: After user confirms, THEN run prerequisite checks:
 4. Check Snowflake connection: run `snow sql -c <SNOWFLAKE_CONNECTION> -q "SELECT CURRENT_ACCOUNT(), CURRENT_USER(), CURRENT_ROLE()" --format json`
    - If fails, ask user which Snowflake connection to use (list with `snow connection list`)
    - If succeeds, show account/user/role and ask user to confirm
-5. Show summary of both connections and ask "Does this look correct?" before proceeding
+5. Check Openflow environment (Snowflake-managed runtime required):
+   a. Run: `snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRATIONS" --format json`
+      - Must return at least one integration with enabled=true
+      - If empty: STOP — tell user: "This power requires a Snowflake-managed Openflow deployment.
+        Please deploy Openflow via the Snowflake Control Plane UI first, then return here.
+        To get started, search 'Openflow' at https://docs.snowflake.com — look for
+        'Set up Snowflake Openflow' or 'Openflow SPCS runtime'."
+   b. Run: `snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW RUNTIME INTEGRATIONS" --format json`
+      - Must return at least one with enabled=true and snowflakecomputing.app in oauth_redirect_uri
+      - If only BYOC runtimes: STOP — tell user to add a Snowflake-managed runtime via Control Plane UI
+        See https://docs.snowflake.com and search 'Openflow SPCS runtime'
+   c. Run: `snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT" --format json`
+      - At least one service must have status=RUNNING
+      - If all suspended: tell user to resume the Openflow runtime first via the Control Plane UI
+   d. Run: `~/kiro-coco-venv/bin/nipyapi profiles list_profiles`
+      - Must return at least one profile
+      - Ask user which profile targets the Snowflake-managed runtime
+      - Confirm: `~/kiro-coco-venv/bin/nipyapi --profile <profile> config nifi_config`
+        host must match snowflakecomputing.app URL from the runtime integration
+      - If no profile: use steering/openflow-setup.md Section 3 to create one
+6. Show summary of all connections and ask "Does this look correct?" before proceeding
 
-STEP 4: Execute the integration setup following the README.md instructions
+STEP 4: Execute the integration setup following the steering file instructions
 
 IMPORTANT: Before creating any Snowflake resource (database, table, warehouse, role, network rule,
 external access integration, etc.), first check if it already exists:
@@ -68,45 +88,48 @@ If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. 
 Only create new resources after user confirms.
 
 IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow):
+
+**Two-role pattern (critical):**
+- CONNECTOR ROLE = the role with OWNERSHIP of the data plane integration. This is the role the
+  Openflow runtime service users (dpa, integration-secret, runtime-*) are already granted.
+  It MUST be used as the "Snowflake Role" parameter in Step 5.
+- CANVAS ROLE = a new dedicated role created for human canvas UI access only. This is NOT used
+  as the connector role. It gets endpoint access on the SPCS services.
+
+**Why you cannot use a new role as the connector role:**
+The service users (dpa, integration-secret, runtime-*) are Snowflake-internal system users
+managed by the Openflow platform. They cannot receive additional role grants via regular SQL DDL.
+The connector role must be the pre-existing OWNERSHIP role — whatever it is called in this
+environment (ADF_PL_RL, OPENFLOW_RL, etc.).
+
 1. Discover the existing role by running:
      SHOW OPENFLOW DATA PLANE INTEGRATIONS;
    Then for each integration:
      SHOW GRANTS ON INTEGRATION <integration_name>;
-   Find the role with OWNERSHIP — this is the candidate <OPENFLOW_ROLE>.
+   Find the role with OWNERSHIP — this is <OPENFLOW_ROLE> (the connector role).
 2. Verify the role is granted to runtime service users:
-     SHOW GRANTS OF ROLE <candidate_role>;
+     SHOW GRANTS OF ROLE <OPENFLOW_ROLE>;
    Filter for USER grants where grantee_name matches: dpa, integration-secret, runtime-*
-3. Present the discovered role to the user: "Found role '<role>' with grants to runtime service users. Use this as <OPENFLOW_ROLE>?"
-4. If confirmed, use that role. If the user wants a dedicated role, follow the 1c production path.
-5. The Openflow runtime integration names come from:
+3. Present the discovered role to the user: "Found connector role '<role>'. This will be used
+   as the Snowflake Role for Snowpipe Streaming writes."
+4. The Openflow runtime integration names come from:
      SHOW OPENFLOW RUNTIME INTEGRATIONS;
    Use these actual integration names (not placeholders) when granting.
-6. After confirming the role, verify the user has it:
+5. After confirming the connector role, verify the current user has it:
      SHOW GRANTS TO USER <current_user>;
    If the role is missing, grant it.
 
-IMPORTANT: For the canvas UI user setup step (Step 1e in kinesis-openflow):
-1. Ask the user: "Do you need a user to log into the Openflow canvas UI? If so, provide a username."
-2. First discover SPCS service names: SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
-   Then verify whether <OPENFLOW_ROLE> already has ALL_ENDPOINTS_USAGE:
-     SHOW GRANTS OF SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE;
-   If <OPENFLOW_ROLE> is NOT listed, grant it before proceeding:
-     GRANT SERVICE ROLE <runtime_service>!ALL_ENDPOINTS_USAGE TO ROLE <OPENFLOW_ROLE>;
-     GRANT SERVICE ROLE <dataplane_service>!ALL_ENDPOINTS_USAGE TO ROLE <OPENFLOW_ROLE>;
-3. For demos/dev (Option A): create the user with DEFAULT_ROLE = <OPENFLOW_ROLE>:
-     CREATE USER <CANVAS_USER> PASSWORD='...' DEFAULT_ROLE=<OPENFLOW_ROLE>;
-     GRANT ROLE <OPENFLOW_ROLE> TO USER <CANVAS_USER>;
-3. For production (Option B): create a separate <CANVAS_ROLE> with minimal grants:
-   - SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT; (discover service names)
-   - GRANT SERVICE ROLE <runtime_service>!ALL_ENDPOINTS_USAGE TO ROLE <CANVAS_ROLE>
-   - GRANT SERVICE ROLE <dataplane_service>!ALL_ENDPOINTS_USAGE TO ROLE <CANVAS_ROLE>
-   - GRANT USAGE + OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION> TO ROLE <CANVAS_ROLE>
-   - GRANT USAGE ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>
-   Then create the user with DEFAULT_ROLE = <CANVAS_ROLE>.
-4. Canvas UI URL pattern: https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/
-   If OAuth blocks login, append ?role=<OPENFLOW_ROLE> (or ?role=<CANVAS_ROLE>) to the URL.
-5. Privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN) are blocked by Snowflake OAuth —
-   the canvas user's default role must always be a non-privileged role.
+IMPORTANT: Always create a canvas user (Step 1e) — this is REQUIRED, not optional:
+- Create a new dedicated <CANVAS_ROLE> (e.g., <prefix>_CANVAS_RL)
+- Discover SPCS services: SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
+- Grant endpoint access on both SPCS services (runtime + data plane)
+- Grant USAGE/OPERATE on both integrations
+- Create <CANVAS_USER> with default role = <CANVAS_ROLE> and MUST_CHANGE_PASSWORD = FALSE
+- Ask the user for the canvas username and password
+- Canvas URL: https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/
+  If OAuth blocks login, append ?role=<CANVAS_ROLE> to the URL
+- Privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN) are blocked by Snowflake OAuth —
+  the canvas user's default role must always be a non-privileged role
 
 IMPORTANT: For all snow/nipyapi commands in sub-powers, use:
   snow  (system CLI)

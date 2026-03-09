@@ -2,13 +2,12 @@
 
 Minimal steps to get an Openflow runtime accessible via nipyapi.
 
-> All `snow` and `nipyapi` commands below assume the venv created by `SKILL.md` prerequisites.
-> Use `venv/bin/snow` and `venv/bin/nipyapi` from the skill root directory.
+> All `snow` and `nipyapi` commands below use the system `snow` CLI and `~/kiro-coco-venv/bin/nipyapi`.
 
 ## 1. Verify tooling
 
 ```bash
-venv/bin/snow --version && venv/bin/nipyapi --help > /dev/null && echo "OK"
+snow --version && ~/kiro-coco-venv/bin/nipyapi --help > /dev/null && echo "OK"
 ```
 
 If the venv doesn't exist yet, create it first (see `SKILL.md` Prerequisites).
@@ -18,7 +17,7 @@ If the venv doesn't exist yet, create it first (see `SKILL.md` Prerequisites).
 ### 2a. Find deployments
 
 ```bash
-venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRATIONS;" --format json
+snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRATIONS;" --format json
 ```
 
 | Result | Action |
@@ -29,7 +28,7 @@ venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRA
 For each deployment, get details:
 
 ```bash
-venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "DESCRIBE INTEGRATION <data_plane_integration>;" --format json
+snow sql -c <SNOWFLAKE_CONNECTION> -q "DESCRIBE INTEGRATION <data_plane_integration>;" --format json
 ```
 
 Extract `DATA_PLANE_ID` and `EVENT_TABLE` from the output.
@@ -37,7 +36,7 @@ Extract `DATA_PLANE_ID` and `EVENT_TABLE` from the output.
 ### 2b. Find runtimes
 
 ```bash
-venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW RUNTIME INTEGRATIONS;" --format json
+snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW RUNTIME INTEGRATIONS;" --format json
 ```
 
 Each row has an `OAUTH_REDIRECT_URI` field. Extract the NiFi API endpoint from it:
@@ -106,7 +105,7 @@ spcs2:
 ## 4. Verify connectivity
 
 ```bash
-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> system get_nifi_version_info
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> system get_nifi_version_info
 ```
 
 | Result | Action |

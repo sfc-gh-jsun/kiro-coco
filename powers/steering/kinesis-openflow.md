@@ -122,25 +122,46 @@ This OpenSky ECS endpoint provides real-time flight data in JSON format - perfec
 
 ### 1. Snowflake-managed Openflow (SPCS) deployment
 
-An Openflow deployment running on SPCS with at least one active runtime is required before proceeding.
+A Snowflake-managed Openflow deployment with at least one **RUNNING** runtime is required.
+Run these checks before proceeding — if any fail, set up Openflow first (see `../openflow-setup.md`).
 
-- **Running runtime(s)**: Verify via the Openflow UI that at least one runtime is in a running state
-- **Service role grant**: Your Snowflake role must be granted the Openflow service's service role to access the UI (Snowflake managed token handles authentication automatically, but the service role grant is the authorization gate). This same role is needed later when deploying the flow.
-
-**Verify your role has access:**
-
+**Check 1: Data plane integration exists**
 ```sql
--- List service roles defined by the Openflow service
-SHOW ROLES IN SERVICE <db>.<schema>.<openflow_service>;
-
--- Check which roles have been granted the service role
-SHOW GRANTS OF SERVICE ROLE <db>.<schema>.<openflow_service>!ALL_ENDPOINTS_USAGE;
-
--- Grant if missing (requires service owner or MANAGE GRANTS)
-GRANT SERVICE ROLE <db>.<schema>.<openflow_service>!ALL_ENDPOINTS_USAGE TO ROLE <your_role>;
+SHOW OPENFLOW DATA PLANE INTEGRATIONS;
+-- Must return at least one row with enabled = true
 ```
 
-If no Openflow deployment exists, set one up first. This skill does not cover Openflow installation.
+**Check 2: Runtime integration exists**
+```sql
+SHOW OPENFLOW RUNTIME INTEGRATIONS;
+-- Must return at least one row with enabled = true
+-- Note the oauth_redirect_uri — it must contain snowflakecomputing.app (Snowflake-managed)
+-- NOT a BYOC deployment (byoc in the URL)
+```
+
+**Check 3: Runtime SPCS service is RUNNING**
+```sql
+SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
+-- At least one service must have status = RUNNING
+```
+
+**Check 4: nipyapi profile exists for the Snowflake-managed runtime**
+```bash
+~/kiro-coco-venv/bin/nipyapi profiles list_profiles
+# Must return at least one profile
+# Confirm it points to the correct runtime:
+~/kiro-coco-venv/bin/nipyapi --profile <profile> config nifi_config
+# host should match the snowflakecomputing.app/... URL from the runtime integration above
+```
+
+If all four checks pass, you have a working environment. Proceed to Step 0a.
+
+If no Openflow deployment exists, deploy one via the **Snowflake Control Plane UI** first, then return here.
+This skill does not cover Openflow installation — it assumes a running deployment as a prerequisite.
+
+> **Docs:** Search "Openflow" at [docs.snowflake.com](https://docs.snowflake.com) for the
+> latest setup guide. Look for **"Set up Snowflake Openflow"** or
+> **"Openflow SPCS runtime"** to find the deployment instructions.
 
 ### 2. AWS credentials and Kinesis stream
 
@@ -324,7 +345,14 @@ aws kinesis get-records \
 
 ### Step 1: Identify the Openflow Role
 
-The Openflow connector runs under a Snowflake role that must be granted to the runtime's service users. For demos, **reuse the role that already owns the Openflow deployment** — it already has all required grants.
+> **Two-role pattern:** This step produces two distinct roles with different purposes:
+>
+> | Role | Purpose | Used in |
+> |------|---------|---------|
+> | `<OPENFLOW_ROLE>` | **Connector role** — authenticates Snowpipe Streaming writes | Step 5 "Snowflake Role" param |
+> | `<CANVAS_ROLE>` | **Canvas role** — human UI access to NiFi canvas | Canvas login only |
+>
+> **Why they must be separate:** The Openflow runtime service users (`dpa`, `integration-secret`, `runtime-*`) are Snowflake-internal system users managed by the platform. They **cannot** receive additional role grants via SQL DDL. The connector role must be the pre-existing role that already owns the deployment — whatever it is called in your environment. A newly created dedicated role **cannot** serve as the connector role.
 
 **1a. Find the role that owns the data plane integration:**
 
@@ -381,48 +409,25 @@ CREATE WAREHOUSE IF NOT EXISTS <WAREHOUSE>
 GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <OPENFLOW_ROLE>;
 ```
 
-**1e. Create a canvas UI user (for humans who need to log into the NiFi canvas):**
+**1e. Create a canvas UI user (REQUIRED)**
 
-> Privileged roles (`ACCOUNTADMIN`, `SECURITYADMIN`, `ORGADMIN`) are blocked by Snowflake's OAuth. The canvas user's default role must be a non-privileged role.
+A dedicated canvas user must always be created. This separates human UI access from the connector's
+service authentication and avoids using privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN
+are blocked by Snowflake's OAuth).
 
-First, discover the SPCS service names and check whether `<OPENFLOW_ROLE>` already has endpoint access:
+First, discover the SPCS service names:
 
 ```sql
--- Find SPCS service names
 SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
-
--- Check if OPENFLOW_ROLE already has ALL_ENDPOINTS_USAGE on the runtime service
-SHOW GRANTS OF SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE;
 ```
 
-If `<OPENFLOW_ROLE>` is **not** listed, grant it now (one-time setup):
-
-```sql
-GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
-  TO ROLE <OPENFLOW_ROLE>;
-GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE
-  TO ROLE <OPENFLOW_ROLE>;
-```
-
-Once `<OPENFLOW_ROLE>` has endpoint access, choose your approach:
-
-**Option A — Demo/Dev (recommended): reuse `<OPENFLOW_ROLE>`**
-
-```sql
-CREATE USER IF NOT EXISTS <CANVAS_USER>
-  PASSWORD          = '<PASSWORD>'
-  DEFAULT_ROLE      = <OPENFLOW_ROLE>
-  MUST_CHANGE_PASSWORD = FALSE;
-
-GRANT ROLE <OPENFLOW_ROLE> TO USER <CANVAS_USER>;
-```
-
-**Option B — Production: create a dedicated least-privilege `<CANVAS_ROLE>`**
+Create a dedicated `<CANVAS_ROLE>` with endpoint access on both SPCS services:
 
 ```sql
 USE ROLE ACCOUNTADMIN;
 
 CREATE ROLE IF NOT EXISTS <CANVAS_ROLE>;
+GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN;
 
 -- Canvas UI endpoint access (runtime + data plane services)
 GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
@@ -430,12 +435,12 @@ GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
 GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE
   TO ROLE <CANVAS_ROLE>;
 
--- Integration access
+-- Integration access (view/operate the canvas)
 GRANT USAGE   ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
 GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
 GRANT USAGE   ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>;
-GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN;
 
+-- Create the canvas user
 CREATE USER IF NOT EXISTS <CANVAS_USER>
   PASSWORD          = '<PASSWORD>'
   DEFAULT_ROLE      = <CANVAS_ROLE>
@@ -446,9 +451,9 @@ GRANT ROLE <CANVAS_ROLE> TO USER <CANVAS_USER>;
 
 Log in at: `https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/`
 
-If OAuth blocks the login, append `?role=<OPENFLOW_ROLE>` (or `?role=<CANVAS_ROLE>`) to the URL.
+If OAuth blocks the login, append `?role=<CANVAS_ROLE>` to the URL.
 
-> See `openflow-setup.md` Section 5 for full discovery steps and grant reference.
+> See `../openflow-setup.md` Section 5 for full discovery steps and grant reference.
 
 ### Step 2: Create Snowflake Target Table
 
@@ -526,9 +531,9 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ### Step 4: Deploy Kinesis Connector
 
 ```bash
-# Prerequisite: Openflow must be configured (see openflow-setup.md)
+# Prerequisite: invoke Openflow skill first
 # Deploy connector from registry
-~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci deploy_flow \
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci deploy_flow \
   --registry_client ConnectorFlowRegistryClient \
   --bucket connectors \
   --flow kinesis
@@ -537,7 +542,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ### Step 5: Configure Connector Parameters
 
 ```bash
-~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
   --process_group_id "<PG_ID>" \
   --parameters '{
     "AWS Access Key ID": "<AWS_ACCESS_KEY>",
@@ -556,15 +561,19 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 ### Step 6: Start Connector
 
 ```bash
-~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
   --process_group_id "<PG_ID>"
 ```
 
 ## Verification
 
+> **Wait at least 5 minutes** after starting the connector before checking for data.
+> KCL needs time to initialize, acquire shard leases, and flush the first batch via
+> Snowpipe Streaming. Checking too early will show 0 rows and cause false alarms.
+
 ```bash
 # Connector status
-~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci get_status \
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci get_status \
   --process_group_id "<PG_ID>"
 ```
 
@@ -777,10 +786,10 @@ Remove all resources created during setup to avoid ongoing charges.
 
 ```bash
 # Stop connector
-~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci stop_flow --process_group_id "<PG_ID>"
+~/.snowflake/venv/nipyapi-env/bin/nipyapi --profile <OPENFLOW_PROFILE> ci stop_flow --process_group_id "<PG_ID>"
 
 # Delete connector from canvas
-~/kiro-coco-venv/bin/python3 -c "
+../venv/bin/python3 -c "
 import nipyapi
 nipyapi.profiles.switch('<OPENFLOW_PROFILE>')
 pg = nipyapi.canvas.get_process_group('<PG_ID>', 'id')
@@ -899,7 +908,7 @@ SHOW NETWORK RULES LIKE 'kinesis_network_rule';
          ┌──────────────▼──────────────┐
          │  PREREQUISITE:              │
          │  Openflow Runtime deployed  │
-         │  (openflow-setup.md)        │
+         │  (../openflow-setup.md)     │
          └──────────────┬──────────────┘
                         │
 ┌───────────────────────▼────────────────────────┐

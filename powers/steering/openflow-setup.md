@@ -10,14 +10,14 @@ Minimal steps to get an Openflow runtime accessible via nipyapi.
 snow --version && ~/kiro-coco-venv/bin/nipyapi --help > /dev/null && echo "OK"
 ```
 
-If nipyapi is missing, install it: `pip install nipyapi[cli]` in `~/kiro-coco-venv`.
+If the venv doesn't exist yet, create it first (see `SKILL.md` Prerequisites).
 
 ## 2. Discover deployments and runtimes
 
 ### 2a. Find deployments
 
 ```bash
-venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRATIONS;" --format json
+snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRATIONS;" --format json
 ```
 
 | Result | Action |
@@ -28,7 +28,7 @@ venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRA
 For each deployment, get details:
 
 ```bash
-venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "DESCRIBE INTEGRATION <data_plane_integration>;" --format json
+snow sql -c <SNOWFLAKE_CONNECTION> -q "DESCRIBE INTEGRATION <data_plane_integration>;" --format json
 ```
 
 Extract `DATA_PLANE_ID` and `EVENT_TABLE` from the output.
@@ -36,7 +36,7 @@ Extract `DATA_PLANE_ID` and `EVENT_TABLE` from the output.
 ### 2b. Find runtimes
 
 ```bash
-venv/bin/snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW RUNTIME INTEGRATIONS;" --format json
+snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW RUNTIME INTEGRATIONS;" --format json
 ```
 
 Each row has an `OAUTH_REDIRECT_URI` field. Extract the NiFi API endpoint from it:
@@ -105,7 +105,7 @@ spcs2:
 ## 4. Verify connectivity
 
 ```bash
-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> system get_nifi_version_info
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> system get_nifi_version_info
 ```
 
 | Result | Action |
