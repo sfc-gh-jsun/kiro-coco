@@ -50,11 +50,30 @@ STEP 3: After user confirms, THEN run prerequisite checks:
    a. Run: `snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW DATA PLANE INTEGRATIONS" --format json`
       - Must return at least one integration with enabled=true
       - If empty: STOP — Openflow is not deployed at all.
-        Tell the user: "This integration requires a Snowflake-managed Openflow deployment.
-        Please deploy Openflow via the Snowflake Control Plane UI first, then return here.
-        To get started, search 'Openflow' at https://docs.snowflake.com — look for
-        'Set up Snowflake Openflow' or 'Openflow SPCS runtime'."
-        Do NOT continue until the user confirms Openflow is deployed.
+        Tell the user:
+
+        "This integration requires a Snowflake-managed Openflow deployment.
+        Before deploying, complete these steps in order:
+
+        Step 1 — Create a dedicated base role (REQUIRED if none exists):
+          A non-privileged role is required as the Openflow deployment role.
+          ACCOUNTADMIN and other privileged roles are blocked by Snowflake OAuth.
+          If you are on a new account or have no suitable role, create one now:
+
+            USE ROLE ACCOUNTADMIN;
+            CREATE ROLE OPENFLOW_BASE_RL;
+            GRANT ROLE OPENFLOW_BASE_RL TO ROLE ACCOUNTADMIN;
+
+          Note the role name — you will need it in this setup.
+
+        Step 2 — Deploy Openflow via the Snowflake Control Plane UI:
+          Search 'Openflow' at https://docs.snowflake.com for the deployment guide.
+          When prompted to choose a Snowflake role, select the role from Step 1.
+
+        Step 3 — Return here once the deployment is running.
+        Tell me the name of the role you chose and we will continue."
+
+        Do NOT continue until the user confirms Openflow is deployed and provides the role name.
    b. Run: `snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW RUNTIME INTEGRATIONS" --format json`
       - Must return at least one integration with enabled=true
       - Check oauth_redirect_uri — must contain snowflakecomputing.app (Snowflake-managed)
