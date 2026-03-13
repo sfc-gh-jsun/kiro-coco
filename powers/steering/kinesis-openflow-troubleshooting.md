@@ -1,3 +1,5 @@
+<!-- Synced from root skill. Do not edit directly. Run powers/sync-steering.sh -->
+
 # Troubleshooting & Cleanup: Kinesis → Openflow → Snowflake
 
 ## Troubleshooting
@@ -10,7 +12,7 @@
 | "Table does not exist" | Grants missing or table recreated | Re-grant INSERT to Openflow role, restart connector |
 | Snowpipe Streaming error on DEFAULT | Column has DEFAULT clause | Recreate table without DEFAULT values |
 | KCL checkpoint stuck | Stale lease from previous deployment | Delete items in KCL DynamoDB table, restart connector |
-| **Modularized: 409 Conflict on `configure_params`/`configure_inherited_params`** | nipyapi tries to set sensitive params (AWS keys) as non-sensitive, NiFi rejects the change | Use NiFi REST API directly: `POST /parameter-contexts/{id}/update-requests` with `"sensitive": true` in the parameter payload. See `testing/regression.md` Phase 3d. |
+| **Modularized: 409 Conflict on `configure_params`/`configure_inherited_params`** | nipyapi tries to set sensitive params (AWS keys) as non-sensitive, NiFi rejects the change | Use NiFi REST API directly: `POST /parameter-contexts/{id}/update-requests` with `"sensitive": true` in the parameter payload. See `regression.md` Phase 3d. |
 | **Modularized: Consumer processor INVALID — "Given value not found in allowed set"** | `Kinesis Consumer Type` set to invalid value like `POLLING` | Valid values are `SHARED_THROUGHPUT` (polling) or `ENHANCED_FAN_OUT` (dedicated). Do NOT use `POLLING`. |
 | **Modularized: Data goes to unexpected table** | Schema evolution auto-creates table named after the Kinesis stream (uppercased) instead of using a pre-created table | This is by design. Check `SHOW TABLES IN SCHEMA` to find the auto-created table (e.g., `"OPENSKY-REGRESSION-STREAM"`). Must be quoted in SQL due to hyphens. |
 | **Modularized: "Insufficient privileges to operate on schema"** | Connector needs CREATE TABLE to auto-create tables via schema evolution, plus ALL on future tables | Grant `CREATE TABLE ON SCHEMA`, `ALL PRIVILEGES ON ALL TABLES IN SCHEMA`, and `ALL PRIVILEGES ON FUTURE TABLES IN SCHEMA` to the Openflow role. |
@@ -27,10 +29,10 @@ Remove all resources created during setup to avoid ongoing charges.
 
 ```bash
 # Stop connector
-<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci stop_flow --process_group_id "<PG_ID>"
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci stop_flow --process_group_id "<PG_ID>"
 
 # Delete connector from canvas
-<SKILL_DIR>/venv/bin/python3 -c "
+~/kiro-coco-venv/bin/python3 -c "
 import nipyapi
 nipyapi.profiles.switch('<OPENFLOW_PROFILE>')
 pg = nipyapi.canvas.get_process_group('<PG_ID>', 'id')

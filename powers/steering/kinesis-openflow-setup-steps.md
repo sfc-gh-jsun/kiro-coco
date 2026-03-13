@@ -1,8 +1,10 @@
+<!-- Synced from root skill. Do not edit directly. Run powers/sync-steering.sh -->
+
 # Setup Steps: Kinesis → Openflow → Snowflake
 
 Steps 0a through 6 for deploying the streaming ingestion pipeline.
 
-> All `nipyapi` commands below use `<SKILL_DIR>/venv/bin/nipyapi`.
+> All `nipyapi` commands below use `~/kiro-coco-venv/bin/nipyapi`.
 
 ---
 
@@ -399,7 +401,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 
 ```bash
 # Deploy modularized connector from registry (default)
-<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci deploy_flow \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci deploy_flow \
   --registry_client ConnectorFlowRegistryClient \
   --bucket connectors \
   --flow kinesis-json-modularized
@@ -407,7 +409,7 @@ GRANT USAGE ON INTEGRATION kinesis_eai TO ROLE <OPENFLOW_ROLE>;
 
 > **Legacy alternative:** If the runtime only has the legacy `kinesis` flow in its registry
 > (older runtimes), use `--flow kinesis` instead. Check available flows with:
-> `<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci list_registry_flows --registry_client ConnectorFlowRegistryClient --bucket connectors`
+> `~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci list_registry_flows --registry_client ConnectorFlowRegistryClient --bucket connectors`
 
 ## Step 5: Configure Connector Parameters
 
@@ -417,7 +419,7 @@ The modularized connector has 3 nested sub-PGs (Kinesis JSON Source, Streaming D
 
 ```bash
 # Get the NiFi URL and bearer token
-<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> profiles resolve_profile_config
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> profiles resolve_profile_config
 
 # List sub-PGs inside the deployed connector
 curl -s -H "Authorization: Bearer <TOKEN>" \
@@ -429,7 +431,7 @@ Note the `id` of each sub-PG and the `parameterContext.id` of the Kinesis JSON S
 **5b. Configure non-sensitive Source parameters:**
 
 ```bash
-<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
   --process_group_id "<SOURCE_PG_ID>" \
   --parameters '{
     "AWS Region Code": "<AWS_REGION>",
@@ -456,7 +458,7 @@ Note the `id` of each sub-PG and the `parameterContext.id` of the Kinesis JSON S
 
 ```bash
 # Get the parameter context ID for the Source sub-PG
-SOURCE_CTX_ID=$(<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> \
+SOURCE_CTX_ID=$(~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> \
   ci export_parameters --process_group_id "<SOURCE_PG_ID>" 2>/dev/null | \
   python3 -c "import json,sys; print(json.load(sys.stdin)['context_id'])")
 
@@ -486,7 +488,7 @@ curl -s -X POST \
 **5d. Configure Streaming Destination parameters:**
 
 ```bash
-<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
   --process_group_id "<DEST_PG_ID>" \
   --parameters '{
     "Destination Database": "<DB_NAME>",
@@ -504,7 +506,7 @@ curl -s -X POST \
 If using the legacy `kinesis` flow, all parameters are set in one call:
 
 ```bash
-<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci configure_inherited_params \
   --process_group_id "<PG_ID>" \
   --parameters '{
     "AWS Access Key ID": "<AWS_ACCESS_KEY>",
@@ -523,6 +525,6 @@ If using the legacy `kinesis` flow, all parameters are set in one call:
 ## Step 6: Start Connector
 
 ```bash
-<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci start_flow \
   --process_group_id "<PG_ID>"
 ```

@@ -1,3 +1,5 @@
+<!-- Synced from root skill. Do not edit directly. Run powers/sync-steering.sh -->
+
 # Verification: Kinesis → Openflow → Snowflake
 
 > **Wait at least 5 minutes** after starting the connector before checking for data.
@@ -6,7 +8,7 @@
 
 ```bash
 # Connector status
-<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci get_status \
+~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> ci get_status \
   --process_group_id "<PG_ID>"
 ```
 

@@ -1,5 +1,5 @@
 # Kinesis + Openflow: Streaming Ingestion Parameters
-# Referenced by README.md placeholders (e.g., <AWS_REGION>).
+# Referenced by guide.md and setup-steps.md placeholders (e.g., <AWS_REGION>).
 #
 # source:
 #   auto     = detected from AWS CLI / Snowflake connection
@@ -16,12 +16,33 @@ AWS_SECRET_KEY: ""       # [auto] from aws configure get aws_secret_access_key
 STREAM_NAME: ""          # [user] Kinesis Data Stream name, e.g. my-events-stream
 APP_NAME: ""             # [user] KCL application name (becomes DynamoDB table), e.g. my-kinesis-consumer
 
+# --- Connector Selection ---
+CONNECTOR_FLOW: "kinesis-json-modularized"  # Default. Legacy alternative: "kinesis"
+
+# --- Kinesis Consumer (modularized connector) ---
+KINESIS_CONSUMER_TYPE: "SHARED_THROUGHPUT"    # Valid: SHARED_THROUGHPUT | ENHANCED_FAN_OUT
+                                              # WARNING: Do NOT use "POLLING" — invalid, causes INVALID state
+KINESIS_INITIAL_STREAM_POSITION: "TRIM_HORIZON"  # TRIM_HORIZON = oldest record, LATEST = new only
+
 # --- Snowflake (auto: from active Snowflake connection) ---
 DB_NAME: ""              # [user] destination database, e.g. KINESIS_DB
-TABLE_NAME: ""           # [user] destination table, e.g. RAW_EVENTS
+TABLE_NAME: ""           # [legacy only] destination table, e.g. RAW_EVENTS
+                         # Modularized connector ignores this — it auto-creates a table
+                         # named after the stream (see AUTO_TABLE_NAME).
+AUTO_TABLE_NAME: ""      # [modularized only] Auto-created by schema evolution.
+                         # Named after STREAM_NAME, uppercased. Must be quoted in SQL
+                         # if it contains hyphens (e.g., "MY-STREAM").
 WAREHOUSE: ""            # [auto] from Snowflake connection
 OPENFLOW_ROLE: ""        # [auto] from Snowflake connection / Openflow runtime
 
 # --- Openflow (auto/user + runtime) ---
 OPENFLOW_PROFILE: ""     # [auto] from nipyapi profiles list_profiles, or [user] if creating new
 PG_ID: ""                # [runtime] process group ID, populated after deploy
+
+# --- Sub-PG IDs (modularized connector only) ---
+# The modularized connector has 3 nested sub-PGs, each with its own parameter context.
+# These are discovered at runtime via NiFi REST API (see setup-steps.md Step 5a).
+SOURCE_PG_ID: ""                 # [runtime] Kinesis JSON Source sub-PG ID
+SOURCE_PARAM_CONTEXT_ID: ""      # [runtime] Source parameter context ID (for sensitive param updates)
+DEST_PG_ID: ""                   # [runtime] Streaming Destination sub-PG ID
+TRANSFORM_PG_ID: ""              # [runtime] Custom Transformations sub-PG ID (usually no config needed)

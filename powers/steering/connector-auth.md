@@ -1,3 +1,5 @@
+<!-- Synced from root skill. Do not edit directly. Run powers/sync-steering.sh -->
+
 # Openflow Connector Authentication Architecture
 
 How the Kinesis connector authenticates to Snowflake for Snowpipe Streaming writes.

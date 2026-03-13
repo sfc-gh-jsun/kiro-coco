@@ -1,3 +1,5 @@
+<!-- Synced from root skill. Do not edit directly. Run powers/sync-steering.sh -->
+
 # Openflow Runtime Setup (Manual)
 
 Minimal steps to get an Openflow runtime accessible via nipyapi.
@@ -10,7 +12,7 @@ Minimal steps to get an Openflow runtime accessible via nipyapi.
 snow --version && ~/kiro-coco-venv/bin/nipyapi --help > /dev/null && echo "OK"
 ```
 
-If the venv doesn't exist yet, create it first (see `SKILL.md` Prerequisites).
+If the venv doesn't exist yet, create it first (see `POWER.md` Prerequisites).
 
 ## 2. Discover deployments and runtimes
 
@@ -116,9 +118,14 @@ spcs2:
 
 ---
 
-## 5. Create Canvas UI User (Optional)
+## 5. Create Canvas UI User (MANDATORY — Do NOT Skip)
 
-If a Snowflake user needs to log into the Openflow canvas UI (NiFi UI) to create or manage flows, they need a dedicated non-privileged role with the correct service role grants.
+> ⚠️ **This step is MANDATORY, not optional. Always create a dedicated canvas role + user.**
+> Privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN) are blocked by Snowflake OAuth.
+> The base Openflow role is for connector service auth only — it must NOT be used for human UI login.
+> Do NOT skip this step even for demos or quick tests.
+
+A dedicated non-privileged canvas role and user are required for anyone to log into the Openflow canvas UI (NiFi UI) to create or manage flows.
 
 > **Why non-privileged:** Snowflake's OAuth blocks privileged roles (`ACCOUNTADMIN`, `SECURITYADMIN`, `ORGADMIN`) from logging into SPCS services. The user's default role must be a regular role.
 

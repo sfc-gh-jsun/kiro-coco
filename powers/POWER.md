@@ -1,7 +1,7 @@
 ---
 name: "kiro-coco"
 displayName: "Kiro-CoCo: AWS + Snowflake Integrations"
-description: "AWS + Snowflake integrated solutions combining Kinesis, Lambda, DynamoDB, and EventBridge with Snowflake Openflow and Snowpipe Streaming. Use when setting up streaming pipelines from AWS to Snowflake, deploying Kinesis connectors, configuring Openflow on SPCS, or setting up an Openflow canvas user."
+description: "AWS + Snowflake integrated solutions. Use for: Kinesis to Snowflake, Openflow connector setup, Snowpipe Streaming from AWS, deploy Kinesis connector, configure Openflow on SPCS, canvas user setup, streaming ingestion, real-time AWS to Snowflake pipeline."
 keywords: ["aws", "snowflake", "kinesis", "openflow", "streaming", "pipeline", "ingestion"]
 author: "James Sun"
 ---
@@ -21,14 +21,12 @@ STEP 1: Show available integrations FIRST
   Example: "Kinesis + Openflow streaming ingestion"
 - Let the user select which integration they want to work with
 
-STEP 2: After user selects an integration, load and display the workflow FIRST
-- Read the selected sub-folder's README.md IN ITS ENTIRETY — do not skip or summarize any section
-- You MUST read every section of the document thoroughly before proceeding with any deployment steps
+STEP 2: After user selects an integration, load the overview
+- Read `steering/kinesis-openflow.md` to understand the architecture, parameters, and components
 - Display the architecture, workflow, and what will be set up
 - Give the user visibility into what we're going to do
 - Ask if they want to proceed
-- IMPORTANT: Do NOT begin deployment until you have read and understood the complete document.
-  Skipping sections leads to missed prerequisites, wrong parameter values, and failed deployments.
+- IMPORTANT: Do NOT begin deployment until you have read and understood the overview.
 
 STEP 3: After user confirms, THEN run prerequisite checks:
 1. Check required CLIs:
@@ -69,7 +67,6 @@ STEP 3: After user confirms, THEN run prerequisite checks:
    b. Run: `snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW OPENFLOW RUNTIME INTEGRATIONS" --format json`
       - Must return at least one with enabled=true and snowflakecomputing.app in oauth_redirect_uri
       - If only BYOC runtimes: STOP — tell user to add a Snowflake-managed runtime via Control Plane UI
-        See https://docs.snowflake.com and search 'Openflow SPCS runtime'
    c. Run: `snow sql -c <SNOWFLAKE_CONNECTION> -q "SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT" --format json`
       - At least one service must have status=RUNNING
       - If all suspended: tell user to resume the Openflow runtime first via the Control Plane UI
@@ -82,72 +79,92 @@ STEP 3: After user confirms, THEN run prerequisite checks:
 6. Show summary of all connections and ask "Does this look correct?" before proceeding
 
 STEP 4: Execute the integration setup following the steering file instructions
+Load `steering/kinesis-openflow-setup-steps.md` and follow the steps.
+Load additional steering files on-demand as each phase is reached:
+- `steering/kinesis-openflow-verification.md` for verification
+- `steering/kinesis-openflow-cost-estimation.md` for cost analysis
+- `steering/kinesis-openflow-troubleshooting.md` for troubleshooting and cleanup
 
-IMPORTANT: Before creating any Snowflake resource (database, table, warehouse, role, network rule,
-external access integration, etc.), first check if it already exists:
-  - SHOW DATABASES LIKE '<name>';
-  - SHOW TABLES LIKE '<name>' IN <db>.<schema>;
-  - SHOW WAREHOUSES LIKE '<name>';
-  - SHOW ROLES LIKE '<name>';
-  - SHOW NETWORK RULES LIKE '<name>';
-  - SHOW INTEGRATIONS LIKE '<name>';
-If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. Use it, or create a new one with a different name?"
-Only create new resources after user confirms.
+STEP 4b: Create canvas UI user (MANDATORY — DO NOT SKIP)
 
-Similarly, before creating any AWS resource (Kinesis stream, DynamoDB table, Lambda function,
-EventBridge rule, IAM role, etc.), first check if it already exists:
-  - aws kinesis describe-stream --stream-name <name> --region <region> --profile <profile>
-  - aws dynamodb describe-table --table-name <name> --region <region> --profile <profile>
-  - aws lambda get-function --function-name <name> --region <region> --profile <profile>
-  - aws events describe-rule --name <name> --region <region> --profile <profile>
-  - aws iam get-role --role-name <name>
-If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. Use it, or create a new one with a different name?"
-Only create new resources after user confirms.
+After deploying and configuring the connector, always create a canvas user for UI access.
+This step is NOT optional — it must be executed for every deployment.
 
-IMPORTANT: For the Openflow role identification step (Step 1 in kinesis-openflow):
+1. Check if a canvas role already exists:
+   `SHOW ROLES LIKE '%CANVAS%';`
+   If a suitable role exists with the correct grants, ask the user whether to reuse it or create a new one.
+
+2. Discover SPCS service names:
+   `SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;`
+   Note the runtime service and data plane service names.
+
+3. Create the canvas role and grants:
+   ```sql
+   USE ROLE ACCOUNTADMIN;
+   CREATE ROLE IF NOT EXISTS <CANVAS_ROLE>;
+   GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN;
+
+   -- Canvas UI endpoint access (both SPCS services)
+   GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
+     TO ROLE <CANVAS_ROLE>;
+   GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE
+     TO ROLE <CANVAS_ROLE>;
+
+   -- Integration access
+   GRANT USAGE   ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
+   GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
+   GRANT USAGE   ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+   ```
+
+4. Create the canvas user:
+   ```sql
+   CREATE USER IF NOT EXISTS <CANVAS_USER>
+     PASSWORD          = '<PASSWORD>'
+     DEFAULT_ROLE      = <CANVAS_ROLE>
+     MUST_CHANGE_PASSWORD = FALSE;
+   GRANT ROLE <CANVAS_ROLE> TO USER <CANVAS_USER>;
+   ```
+
+5. Show the canvas URL:
+   `https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/`
+   If OAuth blocks the login, append `?role=<CANVAS_ROLE>` to the URL.
+
+Do NOT proceed to Step 5 until the canvas role and user are confirmed to exist.
+See steering/openflow-setup.md Section 5 for the full reference.
+
+STEP 5: Verify and report
+- **Pre-check:** Confirm canvas role and user exist before reporting success.
+  Run: `SHOW ROLES LIKE '%CANVAS%';` and `SHOW USERS LIKE '<CANVAS_USER>';`
+  If either is missing, go back to Step 4b.
+- Run verification checks from `steering/kinesis-openflow-verification.md`
+- Show row counts, connector status, KCL checkpoint health
+- Present summary: "Pipeline running. X rows ingested. Canvas user ready at <URL>."
+
+IMPORTANT: Before creating any Snowflake resource, first check if it already exists.
+Similarly, before creating any AWS resource, first check if it already exists.
+If a resource exists, ask the user whether to use it or create a new one.
+
+IMPORTANT: For the Openflow role identification step:
 
 **Two-role pattern:**
 - BASE ROLE = the pre-existing customer role that owns the Openflow data plane integration.
-  The Openflow runtime authenticates via OAuth as this role. Discovered automatically —
-  the user never needs to know its name. Use it as the "Snowflake Role" in Step 5.
+  Discovered automatically — the user never needs to know its name.
 - CANVAS ROLE = a new dedicated role created for human canvas UI access only.
 
-**How to discover and use the base role (do this silently — no user involvement needed):**
-1. Run: SHOW OPENFLOW DATA PLANE INTEGRATIONS;
-   Then: SHOW GRANTS ON INTEGRATION <integration_name>;
+**How to discover the base role (do this silently):**
+1. SHOW OPENFLOW DATA PLANE INTEGRATIONS; then SHOW GRANTS ON INTEGRATION <name>;
    Find OWNERSHIP → this is <BASE_ROLE>.
-2. Grant data privileges directly to <BASE_ROLE>:
-     GRANT USAGE ON DATABASE <DB_NAME> TO ROLE <BASE_ROLE>;
-     GRANT USAGE ON SCHEMA <DB_NAME>.PUBLIC TO ROLE <BASE_ROLE>;
-     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ... TO ROLE <BASE_ROLE>;
-     GRANT USAGE ON WAREHOUSE <WAREHOUSE> TO ROLE <BASE_ROLE>;
-3. Use <BASE_ROLE> as the "Snowflake Role" parameter in Step 5.
-4. Verify the current user has <BASE_ROLE>:
-     SHOW GRANTS TO USER <current_user>;
-   If missing, grant it: GRANT ROLE <BASE_ROLE> TO USER <current_user>;
-5. The Openflow runtime integration names come from:
-     SHOW OPENFLOW RUNTIME INTEGRATIONS;
-   Use these actual names (not placeholders) when granting.
+2. Grant data privileges directly to <BASE_ROLE>.
+3. Use <BASE_ROLE> as "Snowflake Role" in connector parameters.
 
 See steering/connector-auth.md for the full architecture explanation.
 
-IMPORTANT: Always create a canvas user (Step 1e) — this is REQUIRED, not optional:
-- Create a new dedicated <CANVAS_ROLE> (e.g., <prefix>_CANVAS_RL)
-- Discover SPCS services: SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;
-- Grant endpoint access on both SPCS services (runtime + data plane)
-- Grant USAGE/OPERATE on both integrations
-- Create <CANVAS_USER> with default role = <CANVAS_ROLE> and MUST_CHANGE_PASSWORD = FALSE
-- Ask the user for the canvas username and password
-- Canvas URL: https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/
-  If OAuth blocks login, append ?role=<CANVAS_ROLE> to the URL
-- Privileged roles (ACCOUNTADMIN, SECURITYADMIN, ORGADMIN) are blocked by Snowflake OAuth —
-  the canvas user's default role must always be a non-privileged role
+IMPORTANT: Always create a canvas user — this is REQUIRED, not optional.
+See steering/openflow-setup.md Section 5 for the full canvas user creation workflow.
 
 IMPORTANT: For all snow/nipyapi commands in sub-powers, use:
   snow  (system CLI)
   ~/kiro-coco-venv/bin/nipyapi
-
-NOTE: Integration content lives in POWER_DIR/steering/. Read files from there when following integration instructions.
 -->
 
 ## Prerequisites
@@ -185,23 +202,45 @@ Includes installation instructions for both Kiro and Claude Code.
 |-------------|-------|--------------|-------------------|
 | Kinesis → Openflow → Snowflake streaming ingestion | `steering/kinesis-openflow.md` | Kinesis, DynamoDB, CloudWatch | Openflow SPCS, Snowpipe Streaming |
 
-See also: `steering/openflow-setup.md` — shared prerequisite covering Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup. Read this before starting any integration if Openflow isn't already configured.
+See also: `steering/openflow-setup.md` — shared prerequisite covering Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup.
 
 ## Available Steering Files
 
-- **kinesis-openflow** - Full setup guide for Kinesis → Openflow → Snowflake streaming ingestion: architecture, step-by-step deployment, parameter reference, and teardown
-- **kinesis-openflow-params** - Configurable parameters for the Kinesis-Openflow integration
-- **openflow-setup** - Shared prerequisite: Openflow runtime discovery, nipyapi profile creation, and canvas UI user setup
-- **connector-auth** - Openflow connector authentication architecture: how the base role works, OAuth identity flow, why the base role must be used for Snowpipe Streaming writes
-- **hooks** - Recommended safety hooks: aws-profile-guard blocks AWS commands missing --profile, with install instructions for Kiro and Claude Code
+- **kinesis-openflow.md** - Overview: architecture, parameters, components, getting started
+- **kinesis-openflow-setup-steps.md** - Steps 0a-6: stream, producer, role, table, EAI, connector
+- **kinesis-openflow-verification.md** - Confirm data flowing end-to-end
+- **kinesis-openflow-cost-estimation.md** - Measure actual costs, pricing reference, alerts
+- **kinesis-openflow-troubleshooting.md** - Common issues + complete cleanup
+- **kinesis-openflow-workflow-diagram.md** - ASCII art end-to-end flow
+- **kinesis-openflow-params.yaml** - Configurable parameters
+- **openflow-setup.md** - Shared prerequisite: runtime discovery, nipyapi profile, canvas user
+- **connector-auth.md** - Authentication architecture: base role, OAuth, Snowpipe Streaming
+- **hooks.md** - AWS profile guard hook for safety
 
 ## Conventions
 
-- Integration content (guides, params) lives in `steering/` relative to this file
+- Integration overview lives in `steering/kinesis-openflow.md`
+- Detailed content (setup, verification, costs, troubleshooting) lives in `steering/kinesis-openflow-*.md`
 - Shared prerequisites live at `steering/openflow-setup.md`
 - All `snow` and `nipyapi` commands use system `snow` and `~/kiro-coco-venv/bin/nipyapi`
 - Include cost estimates where applicable
 - Include cleanup instructions in every integration
+
+## Stopping Points
+
+- Step 1: After presenting integrations — wait for user selection
+- Step 2: After showing architecture — wait for user to confirm proceed
+- Step 3: After prereq summary — wait for "Does this look correct?"
+- Step 4: Before each resource creation — confirm if existing resource found
+- Step 4b: After canvas user creation — confirm user can log into canvas UI
+- Step 5: After verification — present final summary
+
+## Output
+
+- Running Kinesis → Openflow → Snowflake streaming pipeline
+- Configured nipyapi profile for Openflow runtime
+- Canvas user with UI access to Openflow
+- Verification summary with row counts and pipeline health
 
 ## License & Attribution
 
@@ -211,6 +250,6 @@ See also: `steering/openflow-setup.md` — shared prerequisite covering Openflow
 
 **Original Work:** This power is derived from the [kiro-coco](https://github.com/sfc-gh-jsun/claude-skills) Claude Code skill.
 
-**Source Version:** Based on v1.0.4.
+**Source Version:** Based on v1.0.5.
 
 **Update Frequency:** This power is updated as new AWS-Snowflake integrations are added or existing ones are revised.

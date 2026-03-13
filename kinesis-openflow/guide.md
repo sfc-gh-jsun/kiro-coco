@@ -32,8 +32,10 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | `<AWS_SECRET_KEY>` | AWS secret access key for Openflow | *(from IAM)* |
 | `<STREAM_NAME>` | Kinesis Data Stream name | `my-events-stream` |
 | `<APP_NAME>` | KCL application name (becomes DynamoDB table) | `my-kinesis-consumer` |
+| `<CONNECTOR_FLOW>` | Flow name in registry (`kinesis-json-modularized` default, `kinesis` legacy) | `kinesis-json-modularized` |
 | `<DB_NAME>` | Snowflake destination database | `KINESIS_DB` |
-| `<TABLE_NAME>` | Snowflake destination table | `RAW_EVENTS` |
+| `<TABLE_NAME>` | Snowflake destination table (legacy only) | `RAW_EVENTS` |
+| `<AUTO_TABLE_NAME>` | Auto-created table name (modularized — named after stream) | `"MY-EVENTS-STREAM"` |
 | `<WAREHOUSE>` | Snowflake warehouse for Openflow | `OPENFLOW_WH` |
 | `<SNOWFLAKE_CONNECTION>` | Snowflake CLI connection name (`snow connection list`) | `my_connection` |
 | `<OPENFLOW_ROLE>` | Snowflake role identified in Step 1 (owns Openflow deployment) | `KINESIS_OPENFLOW_RL` |
@@ -45,6 +47,9 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 | `<CANVAS_USER>` | Snowflake user who will log into the canvas UI | `kinesis_openflow_user` |
 | `<OPENFLOW_PROFILE>` | nipyapi profile for Openflow runtime | `my_openflow` |
 | `<PG_ID>` | Openflow process group ID (after deploy) | *(from deploy output)* |
+| `<SOURCE_PG_ID>` | Kinesis JSON Source sub-PG ID (modularized) | *(from Step 5a)* |
+| `<SOURCE_PARAM_CONTEXT_ID>` | Source parameter context ID (modularized) | *(from Step 5a)* |
+| `<DEST_PG_ID>` | Streaming Destination sub-PG ID (modularized) | *(from Step 5a)* |
 
 ## Components
 
@@ -61,24 +66,24 @@ Fill in these values before running any setup steps. All `<PLACEHOLDER>` tokens 
 
 ## Connector Versions
 
-Two connector versions exist in the Openflow registry. They have fundamentally different architectures and require different deploy/configure strategies.
+The **modularized connector** (`kinesis-json-modularized`) is the current default. The legacy `kinesis` flow is deprecated and absent from newer runtimes. Always use `kinesis-json-modularized` unless the runtime registry only has `kinesis`.
 
 ### Comparison Table
 
-| Aspect | `kinesis` (Legacy) | `kinesis-json-modularized` (v0.2.0+) |
-|--------|-------------------|---------------------------------------|
-| **Runtime** | `spcs1` | `spcs1-regression-test` (or newer runtimes) |
-| **Architecture** | Single PG with one inherited parameter context | 3 nested sub-PGs, each with own parameter context |
-| **Sub-PGs** | None | Kinesis JSON Source, Streaming Destination, Custom Transformations |
-| **Deploy command** | `--flow kinesis` | `--flow kinesis-json-modularized` |
-| **Configure params** | Single `configure_inherited_params` call | Must configure each sub-PG separately |
-| **Sensitive params** (AWS keys) | Work via `configure_inherited_params` | **Must use NiFi REST API directly** — nipyapi causes 409 Conflict |
-| **Consumer type** | Not exposed (defaults internally) | Explicit: `SHARED_THROUGHPUT` or `ENHANCED_FAN_OUT` |
-| **Table naming** | `Kinesis Stream To Table Map` param (explicit mapping) | Schema evolution auto-creates table named after stream |
-| **Table name format** | User-defined (e.g., `FLIGHT_DATA`) | Stream name uppercased (e.g., `"OPENSKY-REGRESSION-STREAM"`) |
-| **DB grants needed** | Standard INSERT on pre-created table | CREATE TABLE + ALL on future tables (schema evolution) |
+| Aspect | `kinesis-json-modularized` (Default) | `kinesis` (Legacy) |
+|--------|---------------------------------------|-------------------|
+| **Availability** | All runtimes (current and new) | Older runtimes only (deprecated from newer registries) |
+| **Architecture** | 3 nested sub-PGs, each with own parameter context | Single PG with one inherited parameter context |
+| **Sub-PGs** | Kinesis JSON Source, Streaming Destination, Custom Transformations | None |
+| **Deploy command** | `--flow kinesis-json-modularized` | `--flow kinesis` |
+| **Configure params** | Must configure each sub-PG separately | Single `configure_inherited_params` call |
+| **Sensitive params** (AWS keys) | **Must use NiFi REST API directly** — nipyapi causes 409 Conflict | Work via `configure_inherited_params` |
+| **Consumer type** | Explicit: `SHARED_THROUGHPUT` or `ENHANCED_FAN_OUT` | Not exposed (defaults internally) |
+| **Table naming** | Schema evolution auto-creates table named after stream | `Kinesis Stream To Table Map` param (explicit mapping) |
+| **Table name format** | Stream name uppercased (e.g., `"OPENSKY-REGRESSION-STREAM"`) | User-defined (e.g., `FLIGHT_DATA`) |
+| **DB grants needed** | CREATE TABLE + ALL on future tables (schema evolution) | Standard INSERT on pre-created table |
 | **Auth strategy** | `SNOWFLAKE_MANAGED` (SPCS) | `SNOWFLAKE_MANAGED` (SPCS) — same |
-| **Initial position** | Not exposed | Explicit: `TRIM_HORIZON` or `LATEST` |
+| **Initial position** | Explicit: `TRIM_HORIZON` or `LATEST` | Not exposed |
 
 ### Key Pitfalls When Switching Versions
 
@@ -91,6 +96,10 @@ Two connector versions exist in the Openflow registry. They have fundamentally d
 4. **Do NOT forget CREATE TABLE grants.** The Openflow role needs `CREATE TABLE ON SCHEMA` plus `ALL PRIVILEGES ON FUTURE TABLES IN SCHEMA` for schema evolution to work.
 
 5. **ENHANCED_FAN_OUT has a 10-minute initialization delay** on first run. The consumer processor will show "Kinesis Scheduler initialization may take up to 10 minutes" and appear stuck. Use `SHARED_THROUGHPUT` for regression/testing.
+
+6. **Do NOT hardcode revision version 0 in the REST API call.** After `configure_inherited_params` modifies the parameter context (Step 5b), the revision increments. Always fetch the current version with `GET /parameter-contexts/{id}` before submitting the sensitive param update, or you'll get HTTP 400 "is not the most up-to-date revision."
+
+7. **Use file-based JSON for sensitive params with special characters.** If your AWS secret key contains `/`, `+`, or other shell-special characters, inline JSON in curl will break. Write JSON to a temp file with heredoc (`<< 'JSONEOF'`) and use `curl -d @/tmp/file.json`.
 
 ### Modularized Connector Parameters
 
@@ -219,7 +228,9 @@ This skill does not cover Openflow installation — it assumes a running deploym
 
 ### 3. Snowflake permissions
 
-- Snowflake role with INSERT on target table and USAGE on warehouse
+- Snowflake role with USAGE on warehouse and database/schema
+- CREATE TABLE ON SCHEMA + ALL PRIVILEGES ON FUTURE TABLES (modularized connector uses schema evolution)
+- For legacy connector only: INSERT on pre-created target table
 
 ## Estimated Costs (Before Setup)
 

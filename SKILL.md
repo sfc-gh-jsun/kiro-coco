@@ -15,34 +15,6 @@ Integrated solutions combining AWS services with Snowflake, built collaborativel
 
 SKILL_DIR is the directory containing this SKILL.md file.
 
-## Batch / Regression Mode
-
-For repeated non-interactive runs (regression testing), skip the interactive workflow and use:
-
-1. **`kinesis-openflow/params-regression.yaml`** — pre-filled parameters for HOL environment
-2. **`kinesis-openflow/references/regression.md`** — step-by-step batch execution guide
-
-Batch mode runs cleanup → AWS setup → Snowflake setup → deploy → verify with no prompts.
-The only manual step is attaching the EAI to the runtime via the Control Plane UI.
-
-> **Usage:** When the user asks to "run regression" or "run batch", load `params-regression.yaml`
-> and follow `references/regression.md` phases sequentially. Fill `AWS_SECRET_KEY` before starting.
-
-### Execution Strategy: Maximize Tool Calls
-
-**Intent:** Each regression run is a benchmark for measuring human prompts in a session.
-Every tool call (bash, snow sql, nipyapi, etc.) generates an auto-approved permission prompt
-that counts as a "human prompt" in session metrics. This is intentional.
-
-**Rules for regression execution:**
-- Execute commands **individually** (one per tool call), NOT batched into scripts
-- Do NOT combine multiple commands into a single bash call with `&&`
-- Do NOT create wrapper scripts that consolidate steps
-- Do NOT use `AskUserQuestion` — all decisions are pre-made via params-regression.yaml
-- Each `snow sql`, `aws`, `nipyapi`, and `bash` command = 1 tool call = 1 counted prompt
-- The user's permissions are configured to auto-approve, so no physical keyboard input is needed
-- The session should flow autonomously with maximum individual tool calls
-
 ## Workflow
 
 ### Step 1: Show available integrations
@@ -146,8 +118,58 @@ EventBridge rule, IAM role, etc.), first check if it already exists:
 If the resource exists, ask the user: "Found existing <RESOURCE_TYPE> '<name>'. Use it, or create a new one with a different name?"
 Only create new resources after user confirms.
 
+### Step 4b: Create canvas UI user (MANDATORY — DO NOT SKIP)
+
+After deploying and configuring the connector, always create a canvas user for UI access.
+This step is NOT optional — it must be executed for every deployment.
+
+1. Check if a canvas role already exists:
+   `SHOW ROLES LIKE '%CANVAS%';`
+   If a suitable role exists with the correct grants, ask the user whether to reuse it or create a new one.
+
+2. Discover SPCS service names:
+   `SHOW SERVICES LIKE '%OPENFLOW%' IN ACCOUNT;`
+   Note the runtime service and data plane service names.
+
+3. Create the canvas role and grants:
+   ```sql
+   USE ROLE ACCOUNTADMIN;
+   CREATE ROLE IF NOT EXISTS <CANVAS_ROLE>;
+   GRANT ROLE <CANVAS_ROLE> TO ROLE ACCOUNTADMIN;
+
+   -- Canvas UI endpoint access (both SPCS services)
+   GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_RUNTIME_SERVICE>!ALL_ENDPOINTS_USAGE
+     TO ROLE <CANVAS_ROLE>;
+   GRANT SERVICE ROLE <DB>.<SCHEMA>.<OPENFLOW_DATAPLANE_SERVICE>!ALL_ENDPOINTS_USAGE
+     TO ROLE <CANVAS_ROLE>;
+
+   -- Integration access
+   GRANT USAGE   ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
+   GRANT OPERATE ON INTEGRATION <OPENFLOW_RUNTIME_INTEGRATION>   TO ROLE <CANVAS_ROLE>;
+   GRANT USAGE   ON INTEGRATION <OPENFLOW_DATAPLANE_INTEGRATION> TO ROLE <CANVAS_ROLE>;
+   ```
+
+4. Create the canvas user:
+   ```sql
+   CREATE USER IF NOT EXISTS <CANVAS_USER>
+     PASSWORD          = '<PASSWORD>'
+     DEFAULT_ROLE      = <CANVAS_ROLE>
+     MUST_CHANGE_PASSWORD = FALSE;
+   GRANT ROLE <CANVAS_ROLE> TO USER <CANVAS_USER>;
+   ```
+
+5. Show the canvas URL:
+   `https://of--<ORG>-<ACCOUNT>.snowflakecomputing.app/<RUNTIME_KEY>/nifi/`
+   If OAuth blocks the login, append `?role=<CANVAS_ROLE>` to the URL.
+
+> **Do NOT proceed to Step 5** until the canvas role and user are confirmed to exist.
+> See `openflow-setup.md` Section 5 for the full reference.
+
 ### Step 5: Verify and report
 
+- **Pre-check:** Confirm canvas role and user exist before reporting success.
+  Run: `SHOW ROLES LIKE '%CANVAS%';` and `SHOW USERS LIKE '<CANVAS_USER>';`
+  If either is missing, go back to Step 4b.
 - Load `references/verification.md` and run all checks
 - Show row counts, connector status, KCL checkpoint health
 - Present summary: "Pipeline running. X rows ingested. Canvas user ready at <URL>."
@@ -242,6 +264,7 @@ See also: `openflow-setup.md` — shared prerequisite covering Openflow runtime 
 - Step 2: After showing architecture — wait for user to confirm proceed
 - Step 3: After prereq summary — wait for "Does this look correct?"
 - Step 4: Before each resource creation — confirm if existing resource found
+- Step 4b: After canvas user creation — confirm user can log into canvas UI
 - Step 5: After verification — present final summary
 
 ## Output
