@@ -2,12 +2,12 @@
 
 Minimal steps to get an Openflow runtime accessible via nipyapi.
 
-> All `snow` and `nipyapi` commands below use the system `snow` CLI and `~/kiro-coco-venv/bin/nipyapi`.
+> All `snow` and `nipyapi` commands below use the system `snow` CLI and `<SKILL_DIR>/venv/bin/nipyapi`.
 
 ## 1. Verify tooling
 
 ```bash
-snow --version && ~/kiro-coco-venv/bin/nipyapi --help > /dev/null && echo "OK"
+snow --version && <SKILL_DIR>/venv/bin/nipyapi --help > /dev/null && echo "OK"
 ```
 
 If the venv doesn't exist yet, create it first (see `SKILL.md` Prerequisites).
@@ -105,7 +105,7 @@ spcs2:
 ## 4. Verify connectivity
 
 ```bash
-~/kiro-coco-venv/bin/nipyapi --profile <OPENFLOW_PROFILE> system get_nifi_version_info
+<SKILL_DIR>/venv/bin/nipyapi --profile <OPENFLOW_PROFILE> system get_nifi_version_info
 ```
 
 | Result | Action |
